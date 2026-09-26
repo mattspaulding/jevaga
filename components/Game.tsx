@@ -62,19 +62,42 @@ export default function Game() {
     return () => clearInterval(id);
   }, []);
 
-  // ← → / A D move, Space fires, instantly, in "You" mode.
+  // "You" mode: a press acts instantly; holding ← → (A D) keeps the ship
+  // sliding one column every HOLD_REPEAT_MS, and holding Space keeps firing
+  // (the gun's reload still limits the rate).
   useEffect(() => {
     if (mode !== "you") return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
+    const HOLD_REPEAT_MS = 120;
+    const held = new Set<Move>();
+    const onDown = (e: KeyboardEvent) => {
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
       const move = KEYS[e.key] ?? KEYS[e.key.toLowerCase()];
       if (!move) return;
       e.preventDefault();
+      if (e.repeat || held.has(move)) return; // the timer below handles holding
+      held.add(move);
       runRef.current?.act(move);
       setLastKey(move);
     };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    const onUp = (e: KeyboardEvent) => {
+      const move = KEYS[e.key] ?? KEYS[e.key.toLowerCase()];
+      if (move) held.delete(move);
+    };
+    const release = () => held.clear();
+    const timer = setInterval(() => {
+      // Left and right held together cancel out.
+      if (held.has("left") !== held.has("right")) runRef.current?.act(held.has("left") ? "left" : "right");
+      if (held.has("fire")) runRef.current?.act("fire");
+    }, HOLD_REPEAT_MS);
+    window.addEventListener("keydown", onDown);
+    window.addEventListener("keyup", onUp);
+    window.addEventListener("blur", release);
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener("keydown", onDown);
+      window.removeEventListener("keyup", onUp);
+      window.removeEventListener("blur", release);
+    };
   }, [mode]);
 
   const newRun = useCallback(() => {

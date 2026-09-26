@@ -5,7 +5,7 @@ import { makeRng } from "@/lib/game/rng";
 import { render, VIEW_H, VIEW_W } from "@/lib/game/render";
 import type { World } from "@/lib/game/world";
 
-const SLIDE_MS = 90;
+const SLIDE_MS = 110; // a little under the hold repeat, so a held key reads as one smooth glide
 const BOOM_MS = 600;
 const STAR_SPEED = 6; // pixels per second at depth 1
 
