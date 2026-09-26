@@ -19,7 +19,7 @@ Build mode: fast (chosen 2026-09-25)
   Learner check: Run `pnpm lesson-test` yourself and read the table: does Jev's choice flip only in the fatal case once the rule is added, and does Nemotron's rule sound like something the frog could follow?
   Commit: `Add world, describe, model clients and lesson test`
 
-- [ ] **2. Press Start and watch Jev play the frog until it dies**
+- [x] **2. Press Start and watch Jev play the frog until it dies**
   Becomes usable: Open localhost:3000, press Start, and Jev moves the frog up a scrolling endless road one beat at a time, with its move and five probability bars shown each beat, until a car hits it or it stalls. The run's distance is shown.
   Why now: The first thing you can actually watch. It wires the browser, the beat loop and `/api/move` to real Jev, and shows early whether pacing and the view feel right before the coach is added.
   PRD ref: `prd.md > The Core Journey` (steps 1-4), `prd.md > Endless road`, `prd.md > Fast decisions (System 1)`, `prd.md > Screens and Layout`
@@ -82,3 +82,4 @@ Activity mode:
 
 ## Revisions
 - Lesson prompt examples can be copied verbatim — in the slice 1 lesson test Nemotron returned the first example rule word for word (it happened to fit that death). Slice 3 must confirm lessons describe the actual death, and drop or vary the examples if they get parroted.
+- Session state lives in `components/Game.tsx`, loaded client-only from `app/page.tsx` — Next 16's lint rule forbids setting state in an effect, and the game needs the URL seed and a random seed on first render, which only exist in the browser.
