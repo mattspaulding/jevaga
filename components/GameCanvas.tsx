@@ -2,29 +2,36 @@
 
 import { useEffect, useRef, type RefObject } from "react";
 import { makeRng } from "@/lib/game/rng";
-import { render, VIEW_H, VIEW_W } from "@/lib/game/render";
+import { render, VIEW_H, VIEW_W, type Star } from "@/lib/game/render";
 import type { World } from "@/lib/game/world";
 
-const BOOM_MS = 600;
-const STAR_SPEED = 6; // pixels per second at depth 1
 
 // Draws every animation frame from the live fight, so movement is smooth
-// without re-rendering React. The stars and the explosion are animated here.
+// without re-rendering React. The starfield scrolls and the hit is timed here.
 export default function GameCanvas({
   worldRef,
   hitRef,
   score,
   who,
+  banner,
 }: {
   worldRef: RefObject<World>;
   hitRef: RefObject<boolean>;
   score: number;
-  who: "JEV" | "YOU";
+  who: "jev" | "you";
+  banner: string | null;
 }) {
   const ref = useRef<HTMLCanvasElement>(null);
+  const whoRef = useRef(who);
+  useEffect(() => {
+    whoRef.current = who;
+  }, [who]);
   useEffect(() => {
     const r = makeRng(7);
-    const stars = Array.from({ length: 50 }, () => ({ x: r() * VIEW_W, y: r() * VIEW_H, s: 0.4 + r() * 1.2 }));
+    // Three depths: many dim far stars, fewer near ones, a rare bright one.
+    const layer = (n: number, depth: Star["depth"]): Star[] =>
+      Array.from({ length: n }, () => ({ x: r() * VIEW_W, y: r() * VIEW_H, depth }));
+    const stars = [...layer(36, 0), ...layer(14, 1), ...layer(3, 2)];
     let raf = 0;
     let boomStart = -Infinity;
     let wasHit = false;
@@ -42,10 +49,8 @@ export default function GameCanvas({
         wasHit = true;
         boomStart = now;
       }
-      const shipX = world.ship.x;
-      const boom = wasHit ? Math.min(0.999, (now - boomStart) / BOOM_MS) : 0;
       const ctx = ref.current?.getContext("2d");
-      if (ctx) render(ctx, world, { shipX, stars, starScroll: ((now - t0) / 1000) * STAR_SPEED, boom });
+      if (ctx) render(ctx, world, { who: whoRef.current, stars, starSeconds: (now - t0) / 1000, boomMs: wasHit ? now - boomStart : null });
       raf = requestAnimationFrame(draw);
     };
     raf = requestAnimationFrame(draw);
@@ -54,8 +59,16 @@ export default function GameCanvas({
   return (
     <div className="gameWrap">
       <canvas ref={ref} width={VIEW_W} height={VIEW_H} className="game" aria-label="Jevaga playfield" />
-      <div className="distance">score {score}</div>
-      <div className="whoTag">{who}</div>
+      <div className="hud hudScore">
+        <span className="hudLabel">SCORE</span>
+        <span className="hudNum">{score}</span>
+      </div>
+      <div className={`hud whoTag ${who}`}>{who === "jev" ? "JEV" : "YOU"}</div>
+      {banner && (
+        <div className="hitBanner" role="status">
+          {banner}
+        </div>
+      )}
     </div>
   );
 }

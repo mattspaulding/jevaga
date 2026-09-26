@@ -50,6 +50,7 @@ export default function Game() {
   const [now, setNow] = useState(() => performance.now());
   const recentMoves = useRef<Move[]>([]);
   const [runs, setRuns] = useState<RunRow[]>([]);
+  const [banner, setBanner] = useState<string | null>(null); // "HIT · RUN 4 OVER", shown until the next run starts
   // Each Start gets a run id; Stop bumps it, so an older loop still awaiting
   // something sees it has been stopped and never touches the page again.
   const runId = useRef(0);
@@ -111,6 +112,7 @@ export default function Game() {
     const w = resetRun(base);
     worldRef.current = w;
     hitRef.current = false;
+    setBanner(null);
     setScore(0);
     const run = startRun(w, (world) => setScore(world.score));
     runRef.current = run;
@@ -121,6 +123,7 @@ export default function Game() {
     runCount.current += 1;
     const n = runCount.current;
     hitRef.current = true;
+    setBanner(`HIT · RUN ${n} OVER`);
     setRuns((rs) => [...rs, { ...end, n, who }]);
   }, []);
 
@@ -219,12 +222,13 @@ export default function Game() {
 
   return (
     <main className="layout">
-      <GameCanvas worldRef={worldRef} hitRef={hitRef} score={score} who={mode === "jev" ? "JEV" : "YOU"} />
+      <GameCanvas worldRef={worldRef} hitRef={hitRef} score={score} who={mode} banner={banner} />
       <aside className="panel">
         <div className="titleRow">
-          <h1>JEVAGA</h1>
+          <h1 className="title">JEVAGA</h1>
           <StatusChip status={status} error={error} />
         </div>
+        <p className="tagline">Jev flies the ship four times a second. Nemotron rewrites its plan every three seconds.</p>
         <ModeSwitch mode={mode} onChange={setMode} disabled={running} />
         {mode === "jev" ? (
           <>
@@ -234,7 +238,11 @@ export default function Game() {
         ) : (
           <YouBox lastKey={lastKey} />
         )}
-        <RunHistory runs={runs} seed={seed} />
+        <RunHistory
+          runs={runs}
+          seed={seed}
+          live={status === "running" || status === "starting" || status === "retrying" ? { n: runs.length + 1, who: mode } : null}
+        />
         <Controls status={status} onStart={start} onStop={stop} />
       </aside>
     </main>

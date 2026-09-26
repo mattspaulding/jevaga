@@ -1,6 +1,7 @@
 // Checks the shooter's rules that the game, Jev's descriptions and the tests depend on.
 // Run: pnpm world-check
 import { describeMoves } from "../lib/describe";
+import { LETTERS, SPRITES } from "../lib/game/sprites";
 import {
   act,
   advance,
@@ -189,6 +190,17 @@ function quiet(seed = 1): World {
   const m = describeMoves(w);
   check('stopping under a bullet is described as "bullet in …"', /Here: bullet in 0\.\d s/.test(m.stay));
   check("move descriptions never say safe/unsafe", !Object.values(m).some((s) => /\b(safe|unsafe|danger|best)\b/i.test(s)));
+}
+
+// The sprite grids copied from the design canvas are well formed.
+{
+  const bad = Object.entries(SPRITES).filter(
+    ([, rows]) => rows.some((r) => r.length !== rows[0].length) || [...rows.join("")].some((ch) => !LETTERS.has(ch)),
+  );
+  check(`all ${Object.keys(SPRITES).length} sprites are rectangular and use only the legend's letters`, bad.length === 0);
+  const needed = ["ship", "ship-thrust", "shot", "bullet", "star-bright", ...[0, 1, 2].flatMap((k) => [`enemy${k}-a`, `enemy${k}-b`, `dive${k}`])];
+  const frames = [1, 2, 3].map((n) => `pop-${n}`).concat([1, 2, 3, 4].map((n) => `boom-${n}`));
+  check("every sprite the renderer draws exists", [...needed, ...frames].every((n) => n in SPRITES));
 }
 
 console.log(failures ? `\n${failures} check(s) failed` : "\nAll checks passed");

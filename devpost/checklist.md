@@ -69,7 +69,7 @@ Build mode: fast (chosen 2026-09-25)
   Learner check: Watch a run with the Nemotron window. Can you see Jev's moves change after a new plan?
   Commit: `Nemotron plans live for Jev`
 
-- [ ] **7. It looks like a 16-bit game**
+- [x] **7. It looks like a 16-bit game**
   Becomes usable: The design-canvas panel from `design-handoff.md` (RPG windows, Pixelify Sans, Jersey 20, gold highlights, HUD tag, HIT banner) and derived space sprites: ship, three enemy types, diver, shots, bullets, explosion, starfield.
   Why now: After the behavior works, so styling never hides a logic bug.
   PRD ref: `prd.md > Look and Feel`, `prd.md > Screens and Layout`
@@ -131,3 +131,4 @@ Activity mode:
 - The plan test's third check measures how far a plan shifts Jev rather than requiring a plan to override survival — with "ignore bullets and keep firing", Jev's chance of firing under a bullet rose from 0.04 to 0.24 but it still dodged, because its fixed instructions put staying alive first. That's the behavior the game wants.
 - Nemotron's plans are strategy (which columns to work, what to shoot first, what to avoid), never step-by-step orders, and Jev's instructions state the survival rule outright — with step-by-step plans ("stay in column 4 and fire"), live planning halved Jev's score (~925 vs ~1,950 fixed) because the orders were stale within a second and Jev stopped dodging. With strategic plans, seed 5 over 4 runs each: fixed plan ~1,150 (8–14 s), live plans ~3,125 (17–51 s, two runs cleared wave 1).
 - The ship now glides continuously instead of stepping between columns, after Matt said held keys still "snap to a grid". Jev's scores fell from about 3,100 to 900 until its moves matched their descriptions: each glide lasts a quarter-second, threats are checked along the path, divers stop turning 4 rows above the ship, and Nemotron's plans avoid the word "stay". Six live runs on seed 5 now average 4,500.
+- Slice 7 took its sprites from Matt's "Jevaga sprites" design canvas instead of deriving them. The canvas's Grids board is copied into `lib/game/sprites.ts` by script, and its In motion board sets the frame timings. The panel follows `design-handoff.md` with three changes. The green window and the green START/YOU PLAY fills are darker, so white and green text pass 4.5:1 contrast. Ligatures are off, because Pixelify Sans turned "fi" into a glyph that reads as "A". The mode switch uses pressed buttons instead of radios, so the arrow keys keep flying the ship.

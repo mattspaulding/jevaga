@@ -35,6 +35,7 @@ export type Dive = { x: number; y: number; fired: number };
 export type Enemy = { id: number; slot: { col: number; row: number }; kind: 0 | 1 | 2; alive: boolean; diving: Dive | null };
 export type Bullet = { x: number; y: number };
 export type Shot = { x: number; y: number };
+export type Pop = { x: number; y: number; kind: 0 | 1 | 2; t: number }; // an enemy destroyed at (x, y) at time t
 
 export type World = {
   seed: number;
@@ -44,6 +45,7 @@ export type World = {
   enemies: Enemy[];
   bullets: Bullet[];
   shots: Shot[];
+  pops: Pop[]; // recent kills, kept briefly so the canvas can draw them bursting
   score: number;
   kills: number;
   wave: number;
@@ -79,6 +81,7 @@ export function newWorld(seed: number): World {
     enemies: formation(),
     bullets: [],
     shots: [],
+    pops: [],
     score: 0,
     kills: 0,
     wave: 1,
@@ -152,6 +155,8 @@ function step(world: World, dt: number): RunEvent {
       return Math.abs(p.x - s.x) < 0.5 && Math.abs(p.y - s.y) < 0.5;
     });
     if (target) {
+      const at = enemyPos(target, t);
+      world.pops.push({ x: at.x, y: at.y, kind: target.kind, t });
       target.alive = false;
       world.score += target.diving ? 200 : 100;
       world.kills++;
@@ -159,6 +164,7 @@ function step(world: World, dt: number): RunEvent {
     }
   }
   world.shots = world.shots.filter((s) => s.y > -1);
+  world.pops = world.pops.filter((p) => t - p.t < 1);
 
   if (!world.enemies.some((e) => e.alive)) {
     world.wave++;

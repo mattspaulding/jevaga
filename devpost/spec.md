@@ -34,47 +34,47 @@ Unchanged: `pnpm dev`, open http://localhost:3000 (`?seed=N` optional), keys in 
 
 ## Look and Feel
 - **Panel:** exactly `design-handoff.md`: RPG windows (Jev blue, Nemotron purple, you green, neutral), Pixelify Sans and Jersey 20, gold for the chosen move and best run, banded navy page, meters, switch, buttons, chips, HUD tags, HIT banner.
-- **Playfield:** 9 columns × 14 rows of 16 px, drawn at 4×, `image-rendering: pixelated`, same frame as the handoff. Dark starfield background. Sprites (ship, 2–3 enemy types, diver, shot, enemy bullet, explosion) as character grids in `lib/game/sprites.ts` with outline and bottom-row shading, in the handoff's style. Derived by the build from the handoff palette and style (Matt's call).
+- **Playfield:** 9 columns × 14 rows of 16 px, drawn at 4×, `image-rendering: pixelated`, same frame as the handoff. Starfield in three depths on `#0b0d1c`. Sprites come from Matt's "Jevaga sprites" design canvas (https://claude.ai/artifact/Rubi3VRwQKMfUmArD9pLdL): its Grids board is copied into `lib/game/sprites.ts` as character grids with the board's legend. The ship is green when you fly and blue when Jev flies. The enemies are the Cyclops (row 1, orange), the Bat (row 2, red) and the Drone (row 3, silver), each with two flap frames and a gold-rimmed dive pose. Timings follow the canvas's "In motion" board: flaps 330 ms, thrust flicker 80 ms, an enemy's pop 3 × 80 ms, the ship's boom 4 × 150 ms.
 
 ## Components
 
 ### The fight
 `lib/game/world.ts`. PRD ref: `prd.md > The fight`.
-- **Field:** 9 columns (x, 0–9) × 14 rows (y, 0 at the top). Time `t` in seconds. Seeded random from `lib/game/rng.ts`.
-- **Ship:** bottom row (y = 13), whole-column position; `left`/`right` move one column instantly (the canvas animates the slide), `stay` does nothing, `fire` launches a shot if the gun is ready. Reload 0.35 s, at most 3 shots on screen. Shots climb 12 rows/s.
+- **Field:** positions x 0–8 (columns) × y 0–13 (rows, 0 at the top), continuous. Time `t` in seconds. Seeded random from `lib/game/rng.ts`.
+- **Ship:** bottom row (y = 13), continuous x, glides at 5 columns/s. The keyboard glides while an arrow is held and stops on release. Jev's `left`/`right` glide 0.25 s and stop, so a move goes where its description says; `stay` stops; `fire` stops and launches a shot if the gun is ready. Reload 0.35 s, at most 3 shots on screen. Shots climb 12 rows/s.
 - **Formation:** 3 rows × 7 enemies (rows 1–3, columns 1–7), drifting side to side by up to one column (`sin(0.6 t)`).
 - **Formation fire:** every 1.2 s a random formation enemy drops a bullet.
-- **Dives:** every 3 s (10% faster each new wave, floor 1.5 s) one formation enemy dives: down at 3.5 rows/s, steering toward the ship's column at up to 2 columns/s, firing at rows 5 and 8. A diver that passes the bottom returns to its slot.
-- **Bullets:** fall straight down their column at 7 rows/s.
-- **Hits:** a shot destroys an enemy within half a column and half a row (100 points, diver 200). A bullet in the ship's column within half a row of it, or a diver within 0.6 of it, ends the run. Checked every 20 ms physics step.
+- **Dives:** every 3 s (10% faster each new wave, floor 1.5 s) one formation enemy dives: down at 3.5 rows/s, turning toward the ship at up to 2 columns/s until it is 4 rows above the ship, then falling straight, firing at rows 5 and 8. A diver that passes the bottom returns to its slot.
+- **Bullets:** fall straight down at 7 rows/s.
+- **Hits:** a shot destroys an enemy within half a column and half a row (100 points, diver 200); the kill is kept briefly in `world.pops` so the canvas can draw it bursting. A bullet within 0.45 columns and half a row of the ship, or a diver within 0.6 of it, ends the run. Checked every 20 ms physics step.
 - **Waves:** a cleared formation brings a new one.
-- **Prediction:** `threatAt(world, col, horizon = 2.5)` simulates forward with the ship held in `col` and returns when it would first be hit, or null. `shotTime(world, col)` returns when a shot fired now from `col` would reach the lowest enemy above it.
+- **Prediction:** `threatAt(world, x)` simulates forward with the ship parked at `x`; `threatOnPath(world, path)` does the same for a moving ship, and `movePath(world, move)` is where a Jev move would take it (finish the glide under way, then one glide). Both return when the ship would first be hit, or null. `targetAbove(world, x)` gives the lowest enemy above `x` and how long a shot takes to reach it.
 
 ### Describing the fight to Jev
 `lib/describe.ts`. PRD ref: `prd.md > Jev flies (System 1)`.
 - Prose, facts only, never a verdict. Times in seconds from the moment of asking.
-- `describeFight(world)`: your column; gun ready or reloading; for your column and the ones beside it, when something reaches your row ("bullet in 0.4 s", "diver in 1.1 s", "nothing for 2.5+ s"); each diver's column, height and direction; the lowest enemy above your column and when a shot would reach it; how many enemies are left and where the formation is drifting.
-- `describeMoves(world)`: left / right / stay give the threat timing for the column you'd end up in; fire says whether the gun is ready and what the shot would reach.
+- `describeFight(world)`: where the ship is and, if it is gliding, where it stops; gun ready or reloading; for where it stops and one glide either side, when something reaches the ship counting the way there ("bullet in 0.4 s", "diver in 1.1 s", "nothing for 2.5+ s"); each diver's position, height and whether it is still turning; the lowest enemy above the ship and when a shot would reach it; how many enemies are left and where the formation is drifting.
+- `describeMoves(world)`: left / right say where the glide ends, what it runs into on the way or there, and what is above the landing spot; stay and fire say what reaches the ship where it stops, and fire says whether the gun is ready and what the shot would reach.
 - The same words go to Nemotron, so plans line up with what Jev reads.
 
 ### Jev flies (System 1)
 `lib/system1/*`, `app/api/move/route.ts`. PRD ref: `prd.md > Jev flies (System 1)`.
 - Carried over: the swappable interface, Jev through the gateway's TypeSafe route, the offline fake (SIMULATED), the exact-repeat cache, response validation. Moves become `left | right | stay | fire`.
-- Instructions: "Fly the ship in a space shooter. Stay alive first, then score. Your coach's plan: <plan>".
+- Instructions (`instructionsFor` in `lib/system1/types.ts`): "Pick the ship's next move in a space shooter. Staying alive comes first: never pick a move whose description shows a bullet or diver arriving within 0.6 s. Then follow your coach's plan to score. Your coach's plan: <plan>".
 - `driveWithJev` (carried over): at most 4 questions a second; the move applies when the answer lands; errors or 2.5 s without an answer pause the fight and retry every 3 s.
 
 ### Nemotron plans (System 2)
 `lib/system2/planner.ts`, `app/api/plan/route.ts`. PRD ref: `prd.md > Nemotron plans (System 2)`.
 - Every 3 s during a Jev run: Nemotron 3.5 Lightning on Token Factory, thinking off, `max_tokens` 200, 8 s timeout.
 - Input: `describeFight()`, score, wave, seconds survived, the last 8 moves Jev made, the current plan.
-- Output format: `Plan: <one or two sentences, 40 words or fewer>`, using the game's words (columns, "diver", "bullet in 0.4 s", left/right/stay/fire). Parsed tolerantly; `</think>` stripped.
+- Output format: `Plan: <one or two short sentences, 25 words or fewer>`: strategy, not orders. Where to work ("work x 5 to 7"), what to shoot first, what to keep away from. It never uses stay, hold, wait, stop or remain (Jev reads them as its stay move) and never says to shoot a diver "when it reaches your row". Parsed tolerantly; `</think>` stripped.
 - The first run starts with a fixed plan: "Dodge anything about to reach your column; otherwise line up under an enemy and fire."
 - If a plan call fails or is late, Jev keeps the last plan and the window marks it stale. The fight never waits for Nemotron.
 
 ### Panel and playfield
 `components/*`, `lib/game/render.ts`, `lib/game/sprites.ts`. PRD ref: `prd.md > Screens and Layout`, `prd.md > Look and Feel`.
 - Windows per `design-handoff.md`: Who plays switch; JEV (move, confidence, four probability bars, ms); NEMOTRON (plan, "3 s ago", stale marker); YOU (last key, legend); RUNS (who, score, best in gold); Controls; outage chip.
-- Canvas: starfield, formation, divers, bullets, shots, ship slide animation, explosion on hit, HUD score and YOU/JEV tag.
+- Canvas: three-depth starfield, flapping formation, dive poses, bullets, shots, thrust flicker, a pop per kill, the boom on a hit; HUD score box, YOU/JEV tag, and the "HIT · RUN N OVER" banner until the next run starts.
 
 ## Data Model
 All in page memory.
@@ -82,11 +82,12 @@ All in page memory.
 type Move = "left" | "right" | "stay" | "fire";
 type Enemy = { id: number; slot: { col: number; row: number }; kind: 0 | 1 | 2; alive: boolean;
                diving: null | { x: number; y: number; fired: number } };
-type Bullet = { col: number; y: number };       // enemy bullet, falls
-type Shot = { col: number; y: number };         // player shot, climbs
-type World = { seed: number; t: number; ship: { col: number; reloadUntil: number }; enemies: Enemy[];
-               bullets: Bullet[]; shots: Shot[]; score: number; wave: number; nextDive: number;
-               nextVolley: number; alive: boolean; rng: () => number };
+type Bullet = { x: number; y: number };         // enemy bullet, falls
+type Shot = { x: number; y: number };           // player shot, climbs
+type Pop = { x: number; y: number; kind: 0 | 1 | 2; t: number }; // a kill, for the canvas
+type World = { seed: number; t: number; ship: { x: number; vx: number; glideUntil: number; reloadUntil: number };
+               enemies: Enemy[]; bullets: Bullet[]; shots: Shot[]; pops: Pop[]; score: number; kills: number;
+               wave: number; nextDive: number; nextVolley: number; alive: boolean; rng: () => number };
 type Run = { n: number; who: "jev" | "you"; score: number; seconds: number };
 ```
 
