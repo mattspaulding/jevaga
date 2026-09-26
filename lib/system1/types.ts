@@ -3,7 +3,7 @@ import type { Move } from "../game/world";
 export type DecideInput = {
   state: string;
   moves: Record<Move, string>;
-  playbook: string[];
+  plan: string; // the strategist's current plan, given to Jev as its instructions
 };
 
 export type Decision = {
@@ -14,12 +14,11 @@ export type Decision = {
   ms?: number; // how long the answer took, measured in the browser
 };
 
-// The swappable System 1 slot: anything that picks one of the five moves.
+// The swappable System 1 slot: anything that picks one of the four moves.
 export type System1 = { decide(input: DecideInput): Promise<Decision> };
 
-export function instructionsFor(playbook: string[]): string {
-  return (
-    "Pick the frog's next move in a road-crossing game. Follow the playbook.\nPlaybook:\n" +
-    playbook.map((rule, i) => `${i + 1}. ${rule}`).join("\n")
-  );
+export const STARTING_PLAN = "Dodge anything about to reach your column; otherwise line up under an enemy and fire.";
+
+export function instructionsFor(plan: string): string {
+  return `Pick the ship's next move in a space shooter. Stay alive first, then score.\nYour coach's plan: ${plan}`;
 }

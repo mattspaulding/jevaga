@@ -8,7 +8,7 @@ const URL = "https://ai-gateway.vercel.sh/typesafe/v1/systemone";
 export class JevError extends Error {}
 
 export const jev: System1 = {
-  async decide({ state, moves, playbook }: DecideInput): Promise<Decision> {
+  async decide({ state, moves, plan }: DecideInput): Promise<Decision> {
     const key = process.env.AI_GATEWAY_API_KEY;
     if (!key) throw new JevError("AI_GATEWAY_API_KEY is not set");
     const res = await fetch(URL, {
@@ -17,7 +17,7 @@ export const jev: System1 = {
       body: JSON.stringify({
         model: process.env.JEV_MODEL || "typesafe-ai/jev",
         state,
-        questions: { move: { type: "choice", instructions: instructionsFor(playbook), criteria: moves } },
+        questions: { move: { type: "choice", instructions: instructionsFor(plan), criteria: moves } },
       }),
       signal: AbortSignal.timeout(10_000),
     });

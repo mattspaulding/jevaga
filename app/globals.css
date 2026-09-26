@@ -70,3 +70,5 @@ html, body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.4
 .ms { margin-left: 8px; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .lateLine { margin: 8px 0 0; font-size: 12px; color: var(--warn); min-height: 1.4em; }
 .who { font-size: 11px; color: var(--muted); }
+.whoTag { position: absolute; top: 10px; right: 10px; background: #1b1b28cc; padding: 4px 8px; font-size: 12px; letter-spacing: 0.08em; }
+.you { border-color: var(--good, #3fbf6a); }

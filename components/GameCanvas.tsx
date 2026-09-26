@@ -1,57 +1,62 @@
 "use client";
 
 import { useEffect, useRef, type RefObject } from "react";
-import { render, TILE, VIEW_ROWS } from "@/lib/game/render";
-import { COLS, visibleRows, type World } from "@/lib/game/world";
+import { makeRng } from "@/lib/game/rng";
+import { render, VIEW_H, VIEW_W } from "@/lib/game/render";
+import type { World } from "@/lib/game/world";
 
-const HOP_MS = 140;
-const HOP_HEIGHT = 5; // pixels at the top of the arc
-const CAMERA_EASE = 8; // higher = camera catches up faster
+const SLIDE_MS = 90;
+const BOOM_MS = 600;
+const STAR_SPEED = 6; // pixels per second at depth 1
 
-// Draws every animation frame from the live world, so cars glide without
-// re-rendering React. The frog's hop and the camera are eased here.
+// Draws every animation frame from the live fight, so movement is smooth
+// without re-rendering React. The ship's slide, the stars and the explosion are eased here.
 export default function GameCanvas({
   worldRef,
   hitRef,
-  distance,
+  score,
+  who,
 }: {
   worldRef: RefObject<World>;
   hitRef: RefObject<boolean>;
-  distance: number;
+  score: number;
+  who: "JEV" | "YOU";
 }) {
   const ref = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
+    const r = makeRng(7);
+    const stars = Array.from({ length: 50 }, () => ({ x: r() * VIEW_W, y: r() * VIEW_H, s: 0.4 + r() * 1.2 }));
     let raf = 0;
-    let lastFrame = performance.now();
-    let from = { ...worldRef.current.frog };
-    let to = { ...worldRef.current.frog };
-    let hopStart = -Infinity;
-    let camera = visibleRows(to.row).bottom;
+    let from = worldRef.current.ship.col;
+    let to = from;
+    let slideStart = -Infinity;
+    let boomStart = -Infinity;
+    let wasHit = false;
+    let world = worldRef.current;
+    const t0 = performance.now();
 
     const draw = (now: number) => {
-      const world = worldRef.current;
-      const dt = Math.min(0.1, (now - lastFrame) / 1000);
-      lastFrame = now;
-      const f = world.frog;
-      if (f.row !== to.row || f.col !== to.col) {
-        // A new run puts the frog back at the start: snap instead of hopping.
-        const jump = Math.abs(f.row - to.row) > 1;
-        from = jump ? { ...f } : { row: to.row, col: to.col };
-        to = { ...f };
-        hopStart = jump ? -Infinity : now;
-        if (jump) camera = visibleRows(f.row).bottom;
+      if (worldRef.current !== world) {
+        // A new run: snap the ship back and clear the explosion.
+        world = worldRef.current;
+        from = to = world.ship.col;
+        slideStart = boomStart = -Infinity;
+        wasHit = false;
       }
-      const p = Math.min(1, (now - hopStart) / HOP_MS);
-      const ease = 1 - (1 - p) * (1 - p);
-      const frogRow = from.row + (to.row - from.row) * ease;
-      const frogCol = from.col + (to.col - from.col) * ease;
-      const lift = p < 1 ? Math.sin(Math.PI * p) * HOP_HEIGHT : 0;
-      const target = visibleRows(to.row).bottom;
-      camera += (target - camera) * Math.min(1, dt * CAMERA_EASE);
-      if (Math.abs(target - camera) < 0.002) camera = target;
-
+      if (world.ship.col !== to) {
+        from = to;
+        to = world.ship.col;
+        slideStart = now;
+      }
+      if (hitRef.current && !wasHit) {
+        wasHit = true;
+        boomStart = now;
+      }
+      const p = Math.min(1, (now - slideStart) / SLIDE_MS);
+      const shipX = from + (to - from) * (1 - (1 - p) * (1 - p));
+      const boom = wasHit ? Math.min(0.999, (now - boomStart) / BOOM_MS) : 0;
       const ctx = ref.current?.getContext("2d");
-      if (ctx) render(ctx, world, { cameraBottom: camera, frogCol, frogRow, lift, hit: hitRef.current });
+      if (ctx) render(ctx, world, { shipX, stars, starScroll: ((now - t0) / 1000) * STAR_SPEED, boom });
       raf = requestAnimationFrame(draw);
     };
     raf = requestAnimationFrame(draw);
@@ -59,8 +64,9 @@ export default function GameCanvas({
   }, [worldRef, hitRef]);
   return (
     <div className="gameWrap">
-      <canvas ref={ref} width={COLS * TILE} height={VIEW_ROWS * TILE} className="game" aria-label="Road with the frog" />
-      <div className="distance">distance {distance}</div>
+      <canvas ref={ref} width={VIEW_W} height={VIEW_H} className="game" aria-label="Jevaga playfield" />
+      <div className="distance">score {score}</div>
+      <div className="whoTag">{who}</div>
     </div>
   );
 }

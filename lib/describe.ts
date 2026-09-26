@@ -1,79 +1,66 @@
-import { busyWindow, carSpans, colsPerSecond, COLS, Lane, Move, targetOf, visibleRows, World } from "./game/world";
+import { COLS, drift, enemyPos, gunReadyIn, SHIP_ROW, targetAbove, threatAt, type Move, type World } from "./game/world";
 
-// Turns the world into the plain sentences Jev reads, at the moment the
-// question is asked. Car facts are in seconds for a given column:
-//   "car now, gone at 0.3 s"  = a car is there now; moving there now gets you hit
-//   "car from 0.4 to 0.9 s"   = safe for 0.4 s, then a car passes
-//   "clear for 3+ s"          = nothing coming
-// The same words are given to Nemotron so its lessons line up with what Jev sees.
+// Turns the fight into the plain sentences Jev reads, at the moment it's
+// asked. Facts only, never a verdict. Times are seconds from now:
+//   "bullet in 0.4 s" = a bullet reaches the ship's row in that column in 0.4 s
+//   "nothing for 2.5+ s" = clear for now
+// The same words go to Nemotron, so its plans line up with what Jev reads.
 
-const HORIZON = 3;
 const s1 = (x: number) => `${x.toFixed(1)} s`;
 
-export function timing(lane: Lane, col: number, t: number): string {
-  const w = busyWindow(lane, col, t, HORIZON);
-  if (!w) return `clear for ${HORIZON}+ s`;
-  if (w.from < 0.05) return `car now, gone at ${s1(w.until)}`;
-  return `car from ${w.from.toFixed(1)} to ${s1(w.until)}`;
+function incoming(world: World, col: number): string {
+  const th = threatAt(world, col);
+  return th ? `${th.by} in ${s1(th.at)}` : "nothing for 2.5+ s";
 }
 
-function laneLabel(offset: number) {
-  return offset === 0 ? "Lane 0, your lane," : `Lane ${offset > 0 ? "+" : "-"}${Math.abs(offset)}`;
+function above(world: World, col: number): string {
+  const t = targetAbove(world, col);
+  if (!t) return "no enemy above";
+  return `${t.diving ? "a diver" : "an enemy"} ${t.rowsUp.toFixed(0)} rows up, a shot reaches it in ${s1(t.seconds)}`;
 }
 
-function traffic(lane: Extract<Lane, { kind: "road" }>) {
-  return `road, cars move ${lane.dir < 0 ? "left" : "right"} ${colsPerSecond(lane.speed).toFixed(1)} columns per second`;
-}
-
-function carSpots(lane: Lane, t: number) {
-  const spots = carSpans(lane, t).map(({ x, len }) => {
-    const a = Math.floor(x);
-    const b = Math.floor(x + len - 0.001) % COLS;
-    return a === b ? `column ${a}` : `columns ${a}-${b}`;
-  });
-  return spots.length ? `${spots.length > 1 ? "cars at" : "a car at"} ${spots.join(" and ")}` : "no cars";
-}
-
-// Every lane on screen. Road lanes say where the cars are and when a car
-// covers your column and the columns either side of it.
-export function describeState(world: World): string {
-  const { row, col } = world.frog;
-  const { bottom, top } = visibleRows(row);
-  const cols = [col - 1, col, col + 1].filter((c) => c >= 0 && c < COLS);
-  const laneLine = (offset: number) => {
-    const lane = world.rows[row + offset];
-    const name = laneLabel(offset);
-    if (lane.kind === "grass") return `${name.replace(/,$/, "")}: grass.`;
-    const times = cols.map((c) => `Column ${c}: ${timing(lane, c, world.t)}`).join("; ");
-    return `${name} (${traffic(lane)}): ${carSpots(lane, world.t)}. ${times}.`;
-  };
-  const lines = [`You are in lane 0, column ${col}. Columns run 0 to ${COLS - 1}. Times are from now.`, laneLine(0)];
-  lines.push("Ahead:");
-  for (let r = row + 1; r <= top; r++) if (world.rows[r]) lines.push(laneLine(r - row));
-  if (row === 0) lines.push(`Behind you: the edge; you can't go back.`);
-  else {
-    lines.push("Behind:");
-    for (let r = row - 1; r >= bottom; r--) lines.push(laneLine(r - row));
-  }
+export function describeFight(world: World): string {
+  const c = world.ship.col;
+  const cols = [c - 1, c, c + 1].filter((x) => x >= 0 && x < COLS);
+  const ready = gunReadyIn(world);
+  const lines = [
+    `Your ship is in column ${c} of 0 to ${COLS - 1}, on the bottom row. Gun: ${ready > 0 ? `reloading, ready in ${s1(ready)}` : "ready"}. Times are from now.`,
+    `Coming at your row: ${cols.map((x) => `column ${x}: ${incoming(world, x)}`).join("; ")}.`,
+    `Above you: ${cols.map((x) => `column ${x}: ${above(world, x)}`).join("; ")}.`,
+  ];
+  const divers = world.enemies.filter((e) => e.alive && e.diving);
+  if (divers.length)
+    lines.push(
+      `Divers: ${divers
+        .map((e) => {
+          const p = enemyPos(e, world.t);
+          const way = p.x < c - 0.25 ? "moving right toward you" : p.x > c + 0.25 ? "moving left toward you" : "coming straight down at you";
+          return `one at column ${p.x.toFixed(1)}, ${(SHIP_ROW - p.y).toFixed(0)} rows up, ${way}`;
+        })
+        .join("; ")}.`,
+    );
+  else lines.push("Divers: none right now.");
+  const left = world.enemies.filter((e) => e.alive).length;
+  const heading = Math.cos(0.6 * world.t) >= 0 ? "right" : "left";
+  lines.push(
+    `Formation: ${left} enemies left, rows 1 to 3, drifting ${heading} (offset ${drift(world.t).toFixed(1)} columns). Bullets on screen: ${world.bullets.length}. Score ${world.score}, wave ${world.wave}.`,
+  );
   return lines.join("\n");
 }
 
-// Five neutral move descriptions: facts about the square each move lands on, never a verdict.
+// The four moves, each with the facts about where it leaves the ship.
 export function describeMoves(world: World): Record<Move, string> {
-  const { row, col } = world.frog;
-  const cell = (r: number, c: number) => {
-    const lane = world.rows[r];
-    return lane.kind === "grass" ? "Grass, no cars." : `${cap(timing(lane, c, world.t))}.`;
-  };
-  const f = targetOf(world.frog, "forward");
+  const c = world.ship.col;
+  const ready = gunReadyIn(world);
+  const side = (to: number, dir: string) =>
+    to < 0 || to >= COLS ? `Can't move ${dir}: the edge. Same as staying. Column ${c}: ${incoming(world, c)}.` : `Slide ${dir} to column ${to}. Column ${to}: ${incoming(world, to)}.`;
   return {
-    forward: `Hop into lane +1, column ${f.col}. ${cell(f.row, f.col)}`,
-    wait: `Stay in lane 0, column ${col}. ${cell(row, col)}`,
-    left: col === 0 ? `Can't move left: the edge. Same as staying. ${cell(row, col)}` : `Hop left to column ${col - 1}. ${cell(row, col - 1)}`,
-    right:
-      col === COLS - 1 ? `Can't move right: the edge. Same as staying. ${cell(row, col)}` : `Hop right to column ${col + 1}. ${cell(row, col + 1)}`,
-    back: row === 0 ? `Not possible: the edge. Same as staying. ${cell(row, col)}` : `Hop back into lane -1, column ${col}. ${cell(row - 1, col)}`,
+    left: side(c - 1, "left"),
+    right: side(c + 1, "right"),
+    stay: `Stay in column ${c}. Column ${c}: ${incoming(world, c)}.`,
+    fire:
+      ready > 0
+        ? `Fire: gun reloading, ready in ${s1(ready)}; nothing happens. Column ${c}: ${incoming(world, c)}.`
+        : `Stay in column ${c} and fire: ${above(world, c)}. Column ${c}: ${incoming(world, c)}.`,
   };
 }
-
-const cap = (s: string) => s[0].toUpperCase() + s.slice(1);

@@ -39,7 +39,7 @@ Build mode: fast (chosen 2026-09-25)
   Learner check: Press Start and let it run for four or five runs. Watch run 1 die, read the coach's rule, and see whether the next run handles that spot. Does the playbook read like real lessons, and does the distance climb?
   Commit: `Coach writes lessons and runs replay with the playbook`
 
-- [ ] **4. You can fly Jevaga with the keyboard**
+- [x] **4. You can fly Jevaga with the keyboard**
   Becomes usable: Open localhost:3000, switch to You play, press Start: the formation drifts, divers swoop and fire, bullets fall, and you slide with ← → (or A D) and fire with Space. Shots destroy enemies and score; one hit ends the run and it joins RUNS.
   Why now: The game has to exist and feel right before any model flies it. It replaces the frog world and exercises the physics timer, prediction and keyboard path the later slices reuse.
   PRD ref: `prd.md > The fight`, `prd.md > You fly`, `prd.md > Runs`
@@ -127,3 +127,4 @@ Activity mode:
 - Jev's "unavailable" was AI Gateway's free-tier rate limit (~25-30 requests a minute, surfacing as 503s), not TypeSafe downtime — measured 29/40 at 1/s and 4/30 at 2/s on the free tier, then 120/120 up to 4/s after Matt bought gateway credit for the Strawberry Digital team. Jev is asked up to 4 times a second again.
 - The coach edits the playbook instead of appending to it: one add/replace/remove per run, at most 4 rules above a fixed "Otherwise, jump forward." — Matt picked option 1 after the playbook grew to 10 contradictory rules. Asking Nemotron to rewrite the whole list failed (it rewrote every rule and invented its own vocabulary), so the code applies a single edit. Seed 13 then climbed 2 → 7 → 16 → 32 → 32 before later edits regressed it.
 - Switched from the frog game to Jevaga, a Galaga-style shooter, with Nemotron as a live strategist instead of a between-runs teacher — Matt, 2026-09-26: Jev only ever waited or hopped forward, which wasn't interesting to watch, and learning between runs was too noisy (the same playbook scored 7 to 32). Slices 1–3 stay as history; slices 4–8 are rewritten for the shooter. Scope, PRD and spec rewritten and approved ("Jevaga, you derive the sprites, go build it").
+- Slice 4 also brought in the fight descriptions for Jev and the four-move/plan interface from slice 5, and retired the frog coach (lesson route, coach memory, lesson test, simulator) from slice 6: the old files no longer compiled against the shooter, and keeping the project building mattered more than slice boundaries. Slice 5 adds the plan test and a new simulator; slice 6 adds the live planner.
