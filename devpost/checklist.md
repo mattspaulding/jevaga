@@ -90,3 +90,4 @@ Activity mode:
 - Jev now reads the whole visible board (every lane on screen, three columns of timing) — Matt's call at the slice 3 checkpoint, after seeing Jev only had the lanes right around the frog.
 - Jev outages show as a chip beside the title instead of replacing the Jev box — Matt: the box swap shifted the whole screen.
 - Minimum beat raised to 500 ms and Jev's answers reused for exact repeats — Matt hit a 429; our own test runs were competing for the same rate limit.
+- The game runs on a real-time clock and you can play it with the keyboard — Matt at the slice 3 checkpoint: make it playable first, and real time "or else… it could easily just be solved by a solver. That's the whole point of using Jev." Reverses the spec's turn-based simplification; a late Jev answer now means the frog waits that beat. Human play moved up from Later.

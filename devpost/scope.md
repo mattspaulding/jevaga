@@ -33,6 +33,8 @@ Matt came here to learn Jev ("That's my whole point") and how it works with "a t
 A few runs back to back. Run 1 hops straight into the first car. A lesson appears. Run 2 waits at that same kind of lane and gets farther. The playbook grows, and a later run goes much farther. The "oh, that's cool" beat is watching the frog survive the exact thing that killed it last time, because of a lesson you watched get written.
 
 ## The POC Boundary
+- Real time: one clock for everyone; a player who doesn't decide in time waits that beat (Matt, during `5-build`: "it has to be real time… that's the whole point of using Jev")
+- You can play it yourself with the arrow keys on the same clock (moved up from Later during `5-build`)
 - One endless level with road lanes and cars at varied speeds
 - Top-down pixel-art rendering in the browser
 - Jev as System 1, via Vercel AI Gateway, behind a swappable adapter
@@ -43,7 +45,7 @@ A few runs back to back. Run 1 hops straight into the first car. A lesson appear
 - Race Jev against another System One model
 - Rivers, logs and trains
 - Hosted demo URL, open-source license and polish for the Nebius entry (due Oct 30, after Basics closes Oct 26)
-- Human vs. AI mode
+- Human vs. AI race on the same road (keyboard play itself moved into the build; see below)
 - Sound
 
 ## Explicitly Cut

@@ -20,6 +20,7 @@ Source: `scope.md > The Core Loop`.
 7. Runs continue until the viewer presses **Stop**. Success is visible in two places: the playbook growing, and distances climbing across runs.
 
 ## Screens and Layout
+- **Who plays** (added during `5-build`): a switch between "Jev plays" and "You play". You play with arrow keys or WASD on the same clock; no key that beat means the frog waits. The coach and playbook are Jev's; your runs are listed as "you".
 One screen, split in two (layout B).
 
 - **Left, about half the width: the game.** Top-down view. The road scrolls upward as the frog advances, so it never runs out. Distance counter in the corner.
@@ -82,6 +83,7 @@ Source: `scope.md > The Unique Kernel`.
 - Coach teaches only after deaths; no mid-run takeover. Matt chose this so the early runs actually fail and the learning is visible. This revised the scope's kernel.
 - Layout B, game left and thinking right, so the viewer sees the model's decisions and the playbook next to the frog.
 - 16-bit style and the frog. Matt picked both from a live sample.
+- Real time for everyone: the world never waits for a decision. If Jev hasn't answered by the next tick, the frog waits that beat, and the panel counts it. Matt: "it has to be real time… That's the whole point of using Jev." An outage (an error, not slowness) pauses the clock instead.
 - Built on Jev. Matt chose Jev or nothing, with no fallback model; Jev turned out to be available through Vercel AI Gateway without the waitlist. *(Updated during `4-spec`; the PRD first planned CLM-8B behind a Jev-shaped adapter.)*
 
 **Assumptions to confirm in review:**
@@ -98,7 +100,7 @@ One screen with the endless road game, the frog run by Jev starting from "jump f
 ## Possible Later Enhancements
 - Race Jev against another System One model (such as the open CLM-8B) on the same road, with the same playbook.
 - Rivers, logs and trains, so old lessons stop being enough.
-- Human-vs-AI mode.
+- Race: you and Jev on the same road at the same time.
 - Sound and music.
 - Let the coach step in mid-run once the playbook is mature.
 

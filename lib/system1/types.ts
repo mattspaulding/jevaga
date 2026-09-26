@@ -11,6 +11,7 @@ export type Decision = {
   probabilities: Record<Move, number>;
   confidence: number;
   source: "jev" | "simulated";
+  ms?: number; // how long the answer took, measured in the browser
 };
 
 // The swappable System 1 slot: anything that picks one of the five moves.

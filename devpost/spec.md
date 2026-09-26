@@ -70,6 +70,7 @@ From `prd.md > Look and Feel`.
 - **Distance** is the furthest row reached this run. Going back doesn't reduce it.
 
 ### Beat loop
+**Revised during `5-build` to real time.** `playRun(world, controller, hooks)` ticks every `BEAT_MS` (600 ms). Right after each tick it describes the board and calls `controller.prepare()`; at the next tick it calls `controller.take()`. `jevController` sends the question at prepare time and uses Jev's answer only if it arrived before the tick; a late answer is thrown away and the frog waits (the panel counts "too slow"). An error returns "pause": the clock holds, the chip shows, and the question is re-sent every 3 s. `keyboardController` returns the last key pressed during the beat, or wait. The notes below describe the original turn-based loop.
 `lib/game/loop.ts`. PRD ref: `prd.md > The Core Journey`.
 - `await getMove()` → `step()` → render → wait until at least 500 ms have passed since the last beat → repeat. The minimum keeps the video watchable and keeps calls under Jev's rate limit (raised from 350 ms at the slice 3 checkpoint). One move request in flight at a time.
 - **Jev outages** (added in build): the first move gets three tries a second apart; after that a failure means "Jev unavailable" and the game doesn't start. Mid-run failures pause the loop, show "Jev unavailable, retrying…", and retry every 3 seconds until Jev answers or Stop.
@@ -200,7 +201,7 @@ The playbook starts as `["Jump forward."]`. The seed comes from `?seed=` or is c
 - **Jev ignores lessons, or dodges cars without any** → caught in build step 1, before the game is built around it.
 
 ## What Was Simplified and Why
-- **Beats instead of real time.** The world waits for each move. Latency can't cause unfair deaths, runs can be replayed exactly, and the lesson test can freeze a single situation. A real-time version would need requests in flight ahead of time and discarding late answers.
+- ~~Beats instead of real time.~~ **Reversed during `5-build`:** the game runs on a real-time clock (Matt's call). The road is still beat-based and replays exactly; what changed is that nobody waits for the player.
 - **Same road every run within a session.** The frog meets the situation that ended its last run, so the video shows cause and effect. A reload, or a different `?seed=`, gives a new road. *(Agent recommendation, approved by Matt.)*
 - **Generator limits plus a solvability check,** instead of hand-designed levels. Every road can be crossed, so distance can keep growing.
 - **Memory only, no storage.** Matches the PRD's reload reset.

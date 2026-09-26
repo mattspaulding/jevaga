@@ -63,3 +63,10 @@ html, body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.4
 .warn-chip { color: var(--warn); }
 .decision { min-height: 190px; }
 .coach { min-height: 92px; }
+.modes { display: flex; gap: 0; }
+.modes button { font: inherit; font-size: 13px; padding: 6px 14px; background: var(--panel); color: var(--muted); border: 2px solid var(--line); cursor: pointer; }
+.modes button.on { color: var(--ink); border-color: var(--jev); }
+.modes button:disabled { cursor: default; }
+.ms { margin-left: 8px; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.lateLine { margin: 8px 0 0; font-size: 12px; color: var(--warn); min-height: 1.4em; }
+.who { font-size: 11px; color: var(--muted); }

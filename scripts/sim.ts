@@ -1,6 +1,6 @@
-// Plays the whole loop headless: real Jev plays, real Nemotron coaches, same road.
+// Plays the whole loop headless on the real-time clock: real Jev plays, real Nemotron coaches, same road.
 // Run: pnpm sim -- <seed> <runs>   (e.g. pnpm sim -- 13 8). Prints each run and the death beat.
-import { playRun } from "../lib/game/loop";
+import { jevController, playRun } from "../lib/game/loop";
 import { newWorld, resetRun } from "../lib/game/world";
 import { cacheStats } from "../lib/system1/cache";
 import { system1 } from "../lib/system1";
@@ -26,16 +26,18 @@ async function main() {
   const distances: number[] = [];
   for (let n = 1; n <= runs; n++) {
     const w = resetRun(base);
-    const { end, beats } = await playRun(w, playbook, {
-      getMove: (input) => retry(() => system1().decide(input)),
-      onBeat: () => {},
+    let late = 0;
+    const { end, beats } = await playRun(w, jevController((input) => system1().decide(input)), {
+      playbook: [...playbook],
+      onBeat: (_w, c) => {
+        if (c.late) late++;
+      },
       stopped: () => false,
-      minBeatMs: 250, // gentler on Jev's rate limit than full speed
     });
     if (!end) break;
     distances.push(end.distance);
     const last = beats[beats.length - 1];
-    console.log(`\nRun ${n}: ${end.cause} at row ${end.distance} after ${w.beat} beats`);
+    console.log(`\nRun ${n}: ${end.cause} at row ${end.distance} after ${w.beat} beats (Jev late ${late}×)`);
     console.log(`  last state: ${last.state.replace(/\n/g, " | ")}`);
     console.log(`  chose ${last.move} (${last.confidence.toFixed(2)}): ${last.moveText}   safe: ${last.safe?.join(", ")}`);
     try {

@@ -1,17 +1,28 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import GameCanvas from "@/components/GameCanvas";
-import { CoachBox, Controls, DecisionBox, Playbook, RunHistory, StatusChip, type Coach, type Status } from "@/components/Panel";
-import { playRun, type RunEnd } from "@/lib/game/loop";
+import {
+  CoachBox,
+  Controls,
+  DecisionBox,
+  ModeSwitch,
+  Playbook,
+  RunHistory,
+  StatusChip,
+  YouBox,
+  type Coach,
+  type Mode,
+  type Status,
+} from "@/components/Panel";
+import { jevController, keyboardController, playRun, type Choice, type RunEnd } from "@/lib/game/loop";
 import { randomSeed } from "@/lib/game/rng";
-import { newWorld, resetRun, type World } from "@/lib/game/world";
+import { newWorld, resetRun, type Move, type World } from "@/lib/game/world";
+import { describeMoves, describeState } from "@/lib/describe";
 import type { DecideInput, Decision } from "@/lib/system1/types";
 import type { BeatLog, Lesson } from "@/lib/system2/nemotron";
 
 const PAUSE_BETWEEN_RUNS_MS = 1500;
-const RETRY_MS = 3000;
-class Stopped extends Error {}
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 async function post<T>(url: string, body: unknown): Promise<T> {
@@ -24,6 +35,17 @@ const getMove = (input: DecideInput) => post<Decision>("/api/move", input);
 const getLesson = (input: { playbook: string[]; beats: BeatLog[]; cause: RunEnd["cause"] }) =>
   post<Lesson>("/api/lesson", input);
 
+const KEYS: Record<string, Move> = {
+  ArrowUp: "forward",
+  w: "forward",
+  ArrowDown: "back",
+  s: "back",
+  ArrowLeft: "left",
+  a: "left",
+  ArrowRight: "right",
+  d: "right",
+};
+
 // ?seed=1234 picks the road; otherwise a random one, shown in the panel.
 function initialSeed(): number {
   const fromUrl = Number(new URLSearchParams(window.location.search).get("seed"));
@@ -34,89 +56,120 @@ function initialSeed(): number {
 export default function Game() {
   const [seed] = useState<number>(initialSeed);
   const [world, setWorld] = useState<World>(() => newWorld(seed));
+  const [mode, setMode] = useState<Mode>("jev");
   const [frame, setFrame] = useState(0);
   const [hit, setHit] = useState(false);
   const [status, setStatus] = useState<Status>("idle");
   const [error, setError] = useState<string | null>(null);
   const [decision, setDecision] = useState<Decision | null>(null);
+  const [late, setLate] = useState(0);
+  const [lastKey, setLastKey] = useState<Move | null>(null);
   const [playbook, setPlaybook] = useState<string[]>(["Jump forward."]);
   const [coach, setCoach] = useState<Coach>({ kind: "idle" });
-  const [runs, setRuns] = useState<(RunEnd & { n: number })[]>([]);
+  const [runs, setRuns] = useState<(RunEnd & { n: number; who: Mode })[]>([]);
   const stopRef = useRef(false);
   const playbookRef = useRef(playbook);
   const runCount = useRef(0);
+  const keyboard = useRef(keyboardController());
+  const running = status === "running" || status === "starting" || status === "retrying" || status === "coaching";
 
-  // Run after run on the same road until Stop: Jev plays, the run ends,
-  // Nemotron writes a rule, the rule joins the playbook, the road replays.
-  const start = useCallback(async () => {
+  // Arrow keys / WASD steer the frog in "You" mode.
+  useEffect(() => {
+    if (mode !== "you") return;
+    const onKey = (e: KeyboardEvent) => {
+      const move = KEYS[e.key] ?? KEYS[e.key.toLowerCase()];
+      if (!move) return;
+      e.preventDefault();
+      keyboard.current.press(move);
+      setLastKey(move);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [mode]);
+
+  const record = useCallback((end: RunEnd, who: Mode) => {
+    runCount.current += 1;
+    const n = runCount.current;
+    setHit(end.cause === "hit");
+    setRuns((rs) => [...rs, { ...end, n, who }]);
+  }, []);
+
+  const onBeat = useCallback((_w: World, choice: Choice) => {
+    if (choice.decision) setDecision(choice.decision);
+    if (choice.late) setLate((n) => n + 1);
+    setFrame((f) => f + 1);
+  }, []);
+
+  // You: one run on the road, same clock as Jev. Press Start to go again.
+  const startYou = useCallback(async () => {
+    const w = resetRun(world);
+    keyboard.current = keyboardController(); // drop any key pressed before Start
+    setWorld(w);
+    setHit(false);
+    setLastKey(null);
+    setStatus("running");
+    const { end } = await playRun(w, keyboard.current, { playbook: [], onBeat, stopped: () => stopRef.current });
+    if (end) record(end, "you");
+    setStatus("stopped");
+  }, [world, onBeat, record]);
+
+  // Jev: run after run on the same road until Stop. Jev plays in real time,
+  // the run ends, Nemotron writes a rule, the rule joins the playbook, the road replays.
+  const startJev = useCallback(async () => {
+    setStatus("starting");
+    // Health check: if Jev can't answer the first question in three tries, don't start.
+    const first = resetRun(world);
+    for (let tries = 1; ; tries++) {
+      try {
+        await getMove({ state: describeState(first), moves: describeMoves(first), playbook: playbookRef.current });
+        break;
+      } catch (e) {
+        if (tries >= 3 || stopRef.current) {
+          setError(e instanceof Error ? e.message : String(e));
+          setStatus("error");
+          return;
+        }
+        await sleep(1000);
+      }
+    }
+    while (!stopRef.current) {
+      const w = resetRun(world);
+      setWorld(w);
+      setHit(false);
+      setDecision(null);
+      setLate(0);
+      setCoach({ kind: "idle" });
+      setStatus("running");
+      const { end, beats } = await playRun(w, jevController(getMove), {
+        playbook: playbookRef.current,
+        onBeat,
+        onPause: () => setStatus("retrying"),
+        onResume: () => setStatus("running"),
+        stopped: () => stopRef.current,
+      });
+      if (!end) break;
+      record(end, "jev");
+
+      setStatus("coaching");
+      setCoach({ kind: "thinking" });
+      try {
+        const lesson = await getLesson({ playbook: playbookRef.current, beats, cause: end.cause });
+        playbookRef.current = [...playbookRef.current, lesson.rule];
+        setPlaybook(playbookRef.current);
+        setCoach({ kind: "lesson", lesson });
+      } catch {
+        setCoach({ kind: "failed" });
+      }
+      await sleep(PAUSE_BETWEEN_RUNS_MS);
+    }
+    setStatus("stopped");
+  }, [world, onBeat, record]);
+
+  const start = useCallback(() => {
     stopRef.current = false;
     setError(null);
-    setStatus("starting");
-    let firstMove = true;
-    let startTries = 0;
-    try {
-      while (!stopRef.current) {
-        const w = resetRun(world);
-        setWorld(w);
-        setHit(false);
-        setDecision(null);
-        setCoach({ kind: "idle" });
-        const { end, beats } = await playRun(w, playbookRef.current, {
-          // The first call doubles as the health check: if Jev is down the
-          // game doesn't start. Mid-run, pause and retry every 3 s instead.
-          getMove: async (input) => {
-            for (;;) {
-              try {
-                const d = await getMove(input);
-                if (firstMove) firstMove = false;
-                setStatus("running");
-                return d;
-              } catch (e) {
-                // Jev through the gateway blips often; give the first call three tries.
-                if (firstMove && ++startTries >= 3) throw e;
-                if (firstMove) {
-                  await sleep(1000);
-                  continue;
-                }
-                if (stopRef.current) throw new Stopped();
-                setStatus("retrying");
-                await sleep(RETRY_MS);
-                if (stopRef.current) throw new Stopped();
-              }
-            }
-          },
-          onBeat: (_w, d) => {
-            setDecision(d);
-            setFrame((f) => f + 1);
-          },
-          stopped: () => stopRef.current,
-        });
-        if (!end) break;
-        runCount.current += 1;
-        const n = runCount.current;
-        setHit(end.cause === "hit");
-        setRuns((rs) => [...rs, { ...end, n }]);
-
-        setStatus("coaching");
-        setCoach({ kind: "thinking" });
-        try {
-          const lesson = await getLesson({ playbook: playbookRef.current, beats, cause: end.cause });
-          playbookRef.current = [...playbookRef.current, lesson.rule];
-          setPlaybook(playbookRef.current);
-          setCoach({ kind: "lesson", lesson });
-        } catch {
-          setCoach({ kind: "failed" });
-        }
-        await sleep(PAUSE_BETWEEN_RUNS_MS);
-        setStatus("running");
-      }
-      setStatus("stopped");
-    } catch (e) {
-      if (e instanceof Stopped) return setStatus("stopped");
-      setError(e instanceof Error ? e.message : String(e));
-      setStatus("error");
-    }
-  }, [world]);
+    return mode === "you" ? startYou() : startJev();
+  }, [mode, startYou, startJev]);
 
   const stop = useCallback(() => {
     stopRef.current = true;
@@ -130,9 +183,16 @@ export default function Game() {
           <h1>GO FROG GO</h1>
           <StatusChip status={status} error={error} />
         </div>
-        <DecisionBox decision={decision} status={status} />
-        <CoachBox coach={coach} />
-        <Playbook rules={playbook} />
+        <ModeSwitch mode={mode} onChange={setMode} disabled={running} />
+        {mode === "jev" ? (
+          <>
+            <DecisionBox decision={decision} status={status} late={late} />
+            <CoachBox coach={coach} />
+            <Playbook rules={playbook} />
+          </>
+        ) : (
+          <YouBox lastKey={lastKey} />
+        )}
         <RunHistory runs={runs} current={runs.length + 1} seed={seed} />
         <Controls status={status} onStart={start} onStop={stop} />
       </aside>

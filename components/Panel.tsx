@@ -1,7 +1,7 @@
 "use client";
 
 import type { RunEnd } from "@/lib/game/loop";
-import { MOVES } from "@/lib/game/world";
+import { MOVES, type Move } from "@/lib/game/world";
 import type { Decision } from "@/lib/system1/types";
 import type { Lesson } from "@/lib/system2/nemotron";
 
@@ -11,6 +11,34 @@ export function StatusChip({ status, error }: { status: Status; error: string | 
   if (status === "retrying") return <span className="chip warn-chip">Jev unavailable · retrying</span>;
   if (status === "error") return <span className="chip warn-chip" title={error ?? undefined}>Jev unavailable</span>;
   return null;
+}
+
+export type Mode = "jev" | "you";
+
+export function ModeSwitch({ mode, onChange, disabled }: { mode: Mode; onChange: (m: Mode) => void; disabled: boolean }) {
+  return (
+    <div className="modes" role="radiogroup" aria-label="Who plays">
+      {(["jev", "you"] as Mode[]).map((m) => (
+        <button key={m} role="radio" aria-checked={mode === m} className={mode === m ? "on" : ""} disabled={disabled} onClick={() => onChange(m)}>
+          {m === "jev" ? "Jev plays" : "You play"}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+const ARROW: Record<Move, string> = { forward: "↑", back: "↓", left: "←", right: "→", wait: "·" };
+
+export function YouBox({ lastKey }: { lastKey: Move | null }) {
+  return (
+    <section className="box decision" aria-label="You">
+      <h2>YOU · arrow keys or WASD</h2>
+      <p className="pick">
+        <strong>{lastKey ? `${ARROW[lastKey]} ${lastKey}` : "—"}</strong>
+      </p>
+      <p className="muted">Same clock as Jev: one hop per beat. No key that beat means the frog waits.</p>
+    </section>
+  );
 }
 
 export type Coach = { kind: "idle" } | { kind: "thinking" } | { kind: "lesson"; lesson: Lesson } | { kind: "failed" };
@@ -48,7 +76,7 @@ export function Playbook({ rules }: { rules: string[] }) {
   );
 }
 
-export function DecisionBox({ decision, status }: { decision: Decision | null; status: Status }) {
+export function DecisionBox({ decision, status, late }: { decision: Decision | null; status: Status; late: number }) {
   return (
     <section className="box decision" aria-label="Jev decision">
       <h2>JEV · via Vercel AI Gateway</h2>
@@ -57,6 +85,7 @@ export function DecisionBox({ decision, status }: { decision: Decision | null; s
           <p className="pick">
             <strong>{decision.move}</strong> <span className="num">{decision.confidence.toFixed(2)}</span>
             {decision.source === "simulated" && <span className="badge">SIMULATED</span>}
+            {decision.ms !== undefined && <span className="ms">{decision.ms} ms</span>}
           </p>
           <div className="bar"><div style={{ width: `${Math.round(decision.confidence * 100)}%` }} /></div>
           <ul className="probs">
@@ -68,6 +97,7 @@ export function DecisionBox({ decision, status }: { decision: Decision | null; s
               </li>
             ))}
           </ul>
+          <p className="lateLine">{late > 0 ? `Too slow ${late}× this run → frog waited` : "\u00a0"}</p>
         </>
       ) : (
         <p className="muted">{status === "starting" ? "Asking Jev…" : status === "error" ? "Jev didn't answer. Press Start to try again." : "Press Start."}</p>
@@ -76,7 +106,7 @@ export function DecisionBox({ decision, status }: { decision: Decision | null; s
   );
 }
 
-export function RunHistory({ runs, current, seed }: { runs: (RunEnd & { n: number })[]; current: number; seed: number }) {
+export function RunHistory({ runs, current, seed }: { runs: (RunEnd & { n: number; who: Mode })[]; current: number; seed: number }) {
   const best = runs.reduce((b, r) => Math.max(b, r.distance), 0);
   return (
     <section className="box runs" aria-label="Runs">
@@ -84,7 +114,7 @@ export function RunHistory({ runs, current, seed }: { runs: (RunEnd & { n: numbe
       <ol>
         {runs.map((r) => (
           <li key={r.n}>
-            #{r.n} <span className="num">{r.distance}</span>
+            #{r.n} <span className="who">{r.who === "you" ? "you" : "jev"}</span> <span className="num">{r.distance}</span>
             {r.cause === "stalled" && <span className="muted"> timeout</span>}
             {r.distance === best && best > 0 && " ★"}
           </li>
