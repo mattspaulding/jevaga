@@ -57,6 +57,19 @@ Unchanged: `pnpm dev`, open http://localhost:3000 (`?seed=N` optional), keys in 
 - **Waves:** a cleared formation brings a new one.
 - **Prediction:** `threatAt(world, x)` simulates forward with the ship parked at `x`; `threatOnPath(world, path)` does the same for a moving ship, and `movePath(world, move)` is where a Jev move would take it. Both return when the ship would first be hit, or null. `targetAbove(world, x)` gives the lowest enemy above `x` and how long a shot takes to reach it.
 
+### Enemies, carriers and waves
+`lib/game/world.ts` (and new `lib/game/enemies.ts` for the dive plans). PRD ref: `prd.md > The fight`. The behavior and every number are in `enemy-design.md`; this section is how it's built.
+- **Dive plans.** When an enemy launches, the world fixes its whole plan from the seed and the ship's position at that moment: a Drone's column and rev timer, a Bat's zigzag legs to row 9, a Cyclops's hover point. A plan is plain data on the enemy, so a world copy still replays exactly. The only later decisions are the ones the design names (the Bat's commit at row 9, the Cyclops's aim when it fires), and each reads the ship at a fixed moment.
+- **Telegraphs.** Every plan exposes the path it will fly (`pathOf(enemy)`) so the canvas can draw it and the description can say it. No warning is shorter than 0.8 s.
+- **Formation habits.** The volley picks an enemy; a Bat drops a straight bullet, a Cyclops glows 0.8 s then fires an aimed shot, a Drone is never picked.
+- **Carriers and weapons.** Carriers are picked from the seed at wave start. A carrier's attacks use its weapon; a killed carrier drops a pickup that falls to row 13, waits 4 s and fades. The ship holds at most one weapon until the wave ends.
+- **Waves.** A table indexed by wave sets which kinds dive, how many at once, speed, carriers, escorts and entry.
+
+### Predicting hits
+`lib/game/world.ts`. PRD ref: `prd.md > Jev flies (System 1)`.
+- `threatOnPath(world, path)` becomes a simulation: copy the world, move the ship along `path` each step, and step the copy forward until something touches the ship, up to 2.5 s. Nothing new launches in the copy (no new dives or volleys), so Jev is told only about what's already on screen or already committed. Every enemy behavior is predicted exactly by the same code that runs it, including a Bat's commit and a Cyclops's aim toward where the ship will be.
+- It reports what hit and which kind (`"Drone"`, `"Bat bullet"`, `"Cyclops beam"`, …) so the description and the coach can name enemies.
+
 ### Describing the fight to Jev
 `lib/describe.ts`. PRD ref: `prd.md > Jev flies (System 1)`. Unchanged from slice 6.
 - Prose, facts only, never a verdict. Times in seconds from the moment of asking.
@@ -109,6 +122,10 @@ Unchanged: `pnpm dev`, open http://localhost:3000 (`?seed=N` optional), keys in 
 - Every replay question goes through one shared limiter at 4 a second, the rate the gateway held clean in testing. A 429 is retried with backoff twice before a replay counts as untested.
 - Time and cost: a replay is about 10 questions, about 2.5 s and $0.0002. With 8 fixed deaths a test is about 90 questions, about 25 s and $0.002, and a retry doubles it. A coach call is 1 to 3 s and about $0.0005. The COACH window shows progress while it runs.
 - The judge tests survival and the control moments only. Score and kills are watched across runs in RUNS and in `scripts/learn.ts`, not used to accept a rule.
+
+### Enemy Library
+`components/Library.tsx`, opened from the panel. PRD ref: `prd.md > Enemy Library`.
+- One page per enemy, from `enemy-design.md > The Enemy Library`: sprites (formation and dive pose, drawn from `lib/game/sprites.ts`), name, lore, how it attacks, its weapon, spot it coming, first seen.
 
 ### Panel and playfield
 `components/*`, `lib/game/render.ts`, `lib/game/sprites.ts`. PRD ref: `prd.md > Screens and Layout`, `prd.md > Look and Feel`.

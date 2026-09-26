@@ -109,7 +109,47 @@ Build mode: fast (chosen 2026-09-25)
   Learner check: Watch a death, then its replay. Can you see what the rule made Jev do differently?
   Commit: `Show each death's replay on the playfield`
 
-- [ ] **11. It fails honestly and can run offline**
+- [ ] **11. Each enemy dives its own way, and Jev can tell them apart**
+  Becomes usable: Drones rev and plunge down a marked column, Bats zigzag along a dotted line and commit at row 9, Cyclopes loop, park and fire aimed shots after a glow; each dive's path is drawn before it lands; formation volleys follow each kind's habit; Jev reads the enemy's name in every threat.
+  Why now: Everything else in the enemy design builds on the dives, and the coach can only write enemy-specific rules once deaths name an enemy.
+  PRD ref: `prd.md > The fight`
+  Spec ref: `spec.md > Enemies, carriers and waves`, `spec.md > Predicting hits`, `spec.md > Describing the fight to Jev`, `enemy-design.md` sections 2, 4 and 5
+  Build: dive plans in `lib/game/enemies.ts`; formation habits; `threatOnPath` as a frozen-launch simulation on a world copy, reporting the kind; describe lines per enemy; path lines, bat commit arrow and cyclops glow on the canvas; world-check cases per kind.
+  Verify (mechanical): `pnpm world-check` passes with new cases (each dive follows its plan, prediction matches the real fight on 40 fights, a replay of a death still retraces exactly); `pnpm replay-test` still passes; `pnpm sim -- 5 3` runs with Jev naming enemies; browser pane shows the three dives with their path lines and no console errors.
+  Learner check: Play a wave in You mode. Can you tell the three enemies apart by how they attack, and does every attack show itself before it lands?
+  Commit: `Each enemy kind dives its own way`
+
+- [ ] **12. Carriers, weapons and pickups**
+  Becomes usable: a carrier of each kind uses its weapon (Wingmen, Fan, Eye Beam); shooting it drops the weapon to your row; gliding onto it gives it to you until the wave ends; Jev reads carriers, pickups and the weapon it holds.
+  Why now: Needs the dives from slice 11; the beam needs `threatOnPath` to handle a hazard that lasts.
+  PRD ref: `prd.md > The fight`
+  Spec ref: `spec.md > Enemies, carriers and waves`, `enemy-design.md` section 2 (weapons, carriers and pickups)
+  Build: carrier selection, the three weapons both ways, pickup fall/wait/fade, player weapon state, sprites for icons and tokens (Matt's canvas or derived), describe lines.
+  Verify (mechanical): world-check cases for each weapon both ways and for pickups; a replay with a weapon in play retraces exactly; browser pane shows a carrier dropping its weapon and the ship using it.
+  Learner check: Shoot a carrier, grab its weapon, and use it. Does it feel worth going for early?
+  Commit: `Carriers drop weapons you can use`
+
+- [ ] **13. Waves escalate**
+  Becomes usable: waves 1 to 6 follow the table in `enemy-design.md` (kinds, divers at once, speed, carriers, escorts, mirrored Drone pairs, fly-in entry), and the swarm rule kicks in when few enemies are left.
+  Why now: Needs every kind and weapon in place.
+  PRD ref: `prd.md > The fight`
+  Spec ref: `spec.md > Enemies, carriers and waves`, `enemy-design.md` section 3
+  Build: the wave table, escorts, mirrored pairs, fly-in paths, swarm; describe lines for escorts and the swarm.
+  Verify (mechanical): world-check steps through waves 1 to 7 and checks each row of the table; sim reaches wave 3+ with rules from a learning run.
+  Learner check: Play to wave 4. Does it get harder in ways you can read?
+  Commit: `Waves escalate like Galaga`
+
+- [ ] **14. The Enemy Library**
+  Becomes usable: a LIBRARY screen from the panel with a page per enemy (sprites, name, lore, attack, weapon, spot it coming, first seen).
+  Why now: The content is settled in `enemy-design.md`; it's quick once the enemies behave as described.
+  PRD ref: `prd.md > Enemy Library`
+  Spec ref: `spec.md > Enemy Library`
+  Build: `components/Library.tsx`, the copy from `enemy-design.md`, sprites drawn from `lib/game/sprites.ts`.
+  Verify (mechanical): browser pane opens each page, text matches `enemy-design.md`, no em dashes, no console errors.
+  Learner check: Open the library. Do the pages make you want to meet these enemies?
+  Commit: `Add the Enemy Library`
+
+- [ ] **15. It fails honestly and can run offline**
   Becomes usable: Outage states verified end to end, including during replays; `SYSTEM1=fake` flies with the SIMULATED badge; README explains setup and how Jev and Nemotron are each used; `.env.example` complete.
   Why now: Makes the live URL safe to leave up through judging.
   PRD ref: `prd.md > States and Boundaries`
@@ -168,4 +208,5 @@ Activity mode:
 - The slice 8 review found that questions without an answer broke exact replays: a slow answer the hit beat was applied 0.28 s after its question even when the live hit came later, and questions lost to an outage stayed in the recording. Deaths now record the step of the hit; an unanswered question's move never lands before it; a failed question is dropped; and a replay asks nothing between the last recorded question and the hit. `world-check` covers a slow flight with an outage offline, and `replay-test` answers "left" to the unanswered last question to prove it can't matter.
 - The coach's first prompt wrote rules tied to one death or wrong about the game, and the one rule it kept made Jev worse. Added `scripts/coach-bench.ts` to score coach variants on the same saved deaths: how often a rule saves its own death, and how many other deaths it also saves. A prompt that explains what hits the ship, plus a hindsight line per moment, brought the coach close to the hand-written rule (each rule saved 5.1 of 7 other deaths on average, the reference 6 of 8). Nemotron's thinking mode did worse and stays off.
 - Added a USAGE window and the matching totals in the headless scripts, showing what Jev and Nemotron have used and cost this session, at Matt's request for the demo video.
+- An enemy design pass was added before the saved learning run and the video (Matt, 2026-09-26: "they all do the exact same thing... what makes it fun is that all the different enemies have their own different attack patterns"). Researched Galaga and its series, fact-checked, and settled on the "Jevaga enemy design" canvas with an Enemy Library in a playful sci-fi tone; the result is `devpost/enemy-design.md`. Slices 11 to 14 build it; honest failures and offline mode move to slice 15.
 

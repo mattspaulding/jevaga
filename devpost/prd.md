@@ -40,10 +40,20 @@ Source: `scope.md > Inspiration & Identity`, `design-handoff.md`, the "Jevaga sp
 ## Features and Behavior
 
 ### The fight
-- A formation of enemies (3 rows) drifts left and right across the top.
-- Every few seconds an enemy breaks off and dives, turning toward the ship until it is 4 rows above it, firing on the way down. Divers that miss fly off the bottom and return to the formation.
+Source: `enemy-design.md`, which has every number.
+- A formation of 21 enemies in three kinds drifts left and right across the top: Cyclops (row 1), Bat (row 2), Drone (row 3).
+- Each kind attacks its own way, and every attack is drawn on screen before it lands:
+  - **Drone (Ploomba):** revs, then falls straight down one marked column. Never turns, never shoots.
+  - **Bat (Waffle):** zigzags down along a dotted line, fires two straight bullets, and commits to where you are once, at row 9.
+  - **Cyclops (Winkless):** loops, parks mid-screen above you and fires aimed shots after its eye glows, then drops out through its column.
+- In formation, Bats drop straight bullets, Cyclopes fire aimed shots after a glow, and Drones stay quiet.
+- Some enemies are carriers. A carrier uses its kind's weapon on you (Drone: Wingmen, Bat: Fan, Cyclops: Eye Beam). Shoot it and the weapon falls to your row; glide onto it and it's yours until the wave ends. A new weapon replaces the old one.
+- Waves escalate: more kinds, more divers at once, faster, escorts and mirrored pairs, and a swarm when few enemies are left.
 - The ship glides along the bottom row and fires straight up, with a short reload between shots.
 - A shot that reaches an enemy destroys it: 100 points, 200 for a diver. A cleared formation brings a new one.
+- [ ] Each kind dives its own way, with its path drawn before it lands.
+- [ ] A carrier uses its weapon until it's shot, and the dropped weapon can be grabbed and used until the wave ends.
+- [ ] Waves 1 to 6 follow the escalation table in `enemy-design.md`.
 - [ ] Enemies drift, dive and fire without any input.
 - [ ] A shot destroys the enemy it reaches; the score goes up.
 - [ ] A bullet or diver touching the ship ends the run.
@@ -70,6 +80,10 @@ Source: `scope.md > Inspiration & Identity`, `design-handoff.md`, the "Jevaga sp
 - [ ] A rule that fails its replay is never added to the rulebook.
 - [ ] The replay plays on the playfield, tagged REPLAY, ending with SURVIVED or HIT.
 - [ ] Forget rules empties the rulebook and the saved deaths.
+
+### Enemy Library
+- A LIBRARY screen has one page per enemy: its sprites, name, a little lore, how it attacks, its weapon, how to spot it coming, and the wave it first appears. The copy is in `enemy-design.md`.
+- [ ] Every enemy in the game has a library page, reachable from the panel.
 
 ### You fly
 - ← → or A D glide the ship; Space fires. Same rules and speed as Jev.
@@ -99,6 +113,7 @@ Source: `scope.md > Inspiration & Identity`, `design-handoff.md`, the "Jevaga sp
 - Keyboard play, carried over. Your runs don't teach Jev.
 - The design-canvas look, carried over.
 - Jev through Vercel AI Gateway on the paid tier, about four decisions a second.
+- Enemies with their own attacks and weapons, Galaga-style but updated, and an Enemy Library with names and playful lore (Matt, 2026-09-26; details in `enemy-design.md`).
 
 **Assumptions, for Matt to confirm with this PRD:**
 - The live planner is retired, not kept as a toggle.
