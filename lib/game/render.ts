@@ -1,4 +1,4 @@
-import { carSpans, COLS, VIEW_ROWS, visibleRows, type World } from "./world";
+import { carSpans, COLS, VIEW_ROWS, type World } from "./world";
 
 export { VIEW_ROWS };
 export const TILE = 16;
@@ -11,16 +11,27 @@ const COLORS = {
   splat: "#e8423a",
 };
 
-// Draws the rows around the frog; cars at their exact positions, so they
-// glide. The camera keeps the frog 3 rows from the bottom.
-export function render(ctx: CanvasRenderingContext2D, world: World, opts: { hit?: boolean } = {}) {
-  const { bottom } = visibleRows(world.frog.row);
+// What the camera and frog look like this frame. The game logic moves the
+// frog square to square instantly; the view eases the frog and the camera so
+// hops and scrolling look smooth.
+export type View = {
+  cameraBottom: number; // lowest row on screen, fractional while scrolling
+  frogCol: number; // fractional during a hop
+  frogRow: number;
+  lift: number; // pixels the frog is off the ground mid-hop
+  hit: boolean;
+};
+
+export function render(ctx: CanvasRenderingContext2D, world: World, view: View) {
+  const base = Math.floor(view.cameraBottom);
+  const frac = view.cameraBottom - base;
+  const rowY = (row: number) => (VIEW_ROWS - 1 - (row - view.cameraBottom)) * TILE;
   ctx.clearRect(0, 0, COLS * TILE, VIEW_ROWS * TILE);
-  for (let i = 0; i < VIEW_ROWS; i++) {
-    const rowIndex = bottom + i;
+  for (let i = 0; i <= VIEW_ROWS; i++) {
+    const rowIndex = base + i;
     const lane = world.rows[rowIndex];
-    const y = (VIEW_ROWS - 1 - i) * TILE;
     if (!lane) continue;
+    const y = (VIEW_ROWS - 1 - i + frac) * TILE;
     ctx.fillStyle = lane.kind === "grass" ? COLORS.grass : COLORS.road;
     ctx.fillRect(0, y, COLS * TILE, TILE);
     for (const { car, x, len } of carSpans(lane, world.t)) {
@@ -32,7 +43,13 @@ export function render(ctx: CanvasRenderingContext2D, world: World, opts: { hit?
       if (px + w > COLS * TILE) ctx.fillRect(px - COLS * TILE, y + 3, w, TILE - 6);
     }
   }
-  const fy = (VIEW_ROWS - 1 - (world.frog.row - bottom)) * TILE;
-  ctx.fillStyle = opts.hit ? COLORS.splat : COLORS.frog;
-  ctx.fillRect(world.frog.col * TILE + 3, fy + 3, TILE - 6, TILE - 6);
+  // Shadow stays on the ground; the frog rises above it mid-hop.
+  const fx = view.frogCol * TILE;
+  const fy = rowY(view.frogRow);
+  if (view.lift > 0.5) {
+    ctx.fillStyle = "rgba(0,0,0,0.25)";
+    ctx.fillRect(fx + 4, fy + 10, TILE - 8, 3);
+  }
+  ctx.fillStyle = view.hit ? COLORS.splat : COLORS.frog;
+  ctx.fillRect(fx + 3, fy + 3 - view.lift, TILE - 6, TILE - 6);
 }
