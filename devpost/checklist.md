@@ -139,7 +139,17 @@ Build mode: fast (chosen 2026-09-25)
   Learner check: Play a wave with sound on. Do the sounds help you read the fight, and is anything annoying enough to change?
   Commit: `Add sound effects`
 
-- [ ] **14. Carriers, weapons and pickups**
+- [ ] **14. A death looks like one**
+  Becomes usable: when the ship is hit the fight no longer just freezes. The ship blows apart (a bigger explosion with debris and a flash), then the enemies react: divers peel off and fly home, and the formation does a short victory dance before the run-over banner. Also the retuned sounds from the sound panel, picked by ear.
+  Why now: Matt, 2026-09-26: "when the player dies, the screen is just kind of freezes in place there. There should be some sort of like explosion and then the aliens would do something. Maybe like a little dance or some sort of celebration maybe or or just fly off." Every death is also what the replay and the video show.
+  PRD ref: `prd.md > The fight`, `prd.md > Sound`
+  Spec ref: `spec.md > Enemies, carriers and waves`, `spec.md > Sound`
+  Build: the death sequence as a render-side animation that starts from the world at the hit (the engine stops at the hit as it does now, so recorded deaths and replays don't change); the explosion and dance sprites or code-drawn effects; the chosen voice set wired into `lib/game/sound.ts`.
+  Verify (mechanical): world-check still passes and replays still retrace exactly; the death sequence renders headless without touching the world; browser pane shows it after a hit, in live runs and replays, with no console errors.
+  Learner check: Die on purpose. Does the death feel like a moment, and do the enemies' reactions read as a celebration?
+  Commit: `Make a death look like one`
+
+- [ ] **15. Carriers, weapons and pickups**
   Becomes usable: a carrier of each kind uses its weapon (Wingmen, Fan, Eye Beam); shooting it drops the weapon to your row; gliding onto it gives it to you until the wave ends; Jev reads carriers, pickups and the weapon it holds.
   Why now: Needs the dives from slice 11 and the fly-in from slice 12, and gets sounds for its weapons from slice 13; the beam needs `threatOnPath` to handle a hazard that lasts.
   PRD ref: `prd.md > The fight`
@@ -149,7 +159,7 @@ Build mode: fast (chosen 2026-09-25)
   Learner check: Shoot a carrier, grab its weapon, and use it. Does it feel worth going for early?
   Commit: `Carriers drop weapons you can use`
 
-- [ ] **15. Waves escalate**
+- [ ] **16. Waves escalate**
   Becomes usable: waves 1 to 6 follow the table in `enemy-design.md` (kinds, divers at once, speed, carriers, escorts, mirrored Drone pairs, fly-in entry), and the swarm rule kicks in when few enemies are left.
   Why now: Needs every kind and weapon in place.
   PRD ref: `prd.md > The fight`
@@ -159,7 +169,7 @@ Build mode: fast (chosen 2026-09-25)
   Learner check: Play to wave 4. Does it get harder in ways you can read?
   Commit: `Waves escalate like Galaga`
 
-- [ ] **16. The Enemy Library**
+- [ ] **17. The Enemy Library**
   Becomes usable: a LIBRARY screen from the panel with a page per enemy (sprites, name, lore, attack, weapon, spot it coming, first seen).
   Why now: The content is settled in `enemy-design.md`; it's quick once the enemies behave as described.
   PRD ref: `prd.md > Enemy Library`
@@ -169,7 +179,7 @@ Build mode: fast (chosen 2026-09-25)
   Learner check: Open the library. Do the pages make you want to meet these enemies?
   Commit: `Add the Enemy Library`
 
-- [ ] **17. It fails honestly and can run offline**
+- [ ] **18. It fails honestly and can run offline**
   Becomes usable: Outage states verified end to end, including during replays; `SYSTEM1=fake` flies with the SIMULATED badge; README explains setup and how Jev and Nemotron are each used; `.env.example` complete.
   Why now: Makes the live URL safe to leave up through judging.
   PRD ref: `prd.md > States and Boundaries`
@@ -235,4 +245,6 @@ Activity mode:
 - Review of slices 11 and 12 (four finders, a skeptic per dimension): three real defects fixed. A Cyclops at an end slot could loop 0.7 columns off the field; its loop now swings to one side, away from the edge. A revving Drone's arrival time ignored the formation's drift during the rev (off by up to 0.2 s), and every "reaching your row" time now counts to when the enemy can hit, matching the "Drone in 0.6 s" numbers. Describing the fight cost 7 to 13 ms per ask during the fly-in; one ask now shares its three predictions and skips the simulation when nothing can reach the ship, which brings it to 0.1 ms in wave 1 and 3 ms in wave 2. Two findings were rejected: the Bat's edge guard is deliberate, and a charging Cyclops with a shut eye is meant to show both.
 - Sound effects added as slice 13, before carriers (Matt, 2026-09-26: "we should also consider adding a sound effects to the game"; on where it goes: "Whatever you think"). Synthesized in code, so there are no audio files and no paid generation, and the video can render the same sounds. Carriers, waves, the Enemy Library and honest failures move to slices 14 to 17.
 - Slice 13: 17 voices, each checked non-silent through an OfflineAudioContext in the browser pane. Cues are read off the world each animation frame, so a hidden tab (which pauses frames) can miss short sounds; that's fine, since nobody hears a hidden tab. The dev build exposes `jevagaSound` in the console to render or check a voice.
+- Matt on the slice 13 sounds, 2026-09-26: "The sounds aren't very good." Asked for a retune with more effort and a review panel. Since no agent can hear, every voice is now a pure function returning samples (`lib/game/voices/`), measured and drawn as spectrograms by `scripts/sound-lab.ts`, so a panel can design and judge sets and Matt picks by ear. The first sounds are kept as the `v1` baseline.
+- A death sequence was added to the list as slice 14 (Matt, 2026-09-26: the screen "freezes in place" when the ship dies; the aliens should "do a little dance... or just fly off"). Carriers, waves, the Enemy Library and honest failures move to slices 15 to 18.
 

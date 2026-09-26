@@ -11,7 +11,8 @@
     "replay-test": "tsx --env-file=.env.local scripts/replay-test.ts",
     "sim": "tsx --env-file=.env.local scripts/sim.ts",
     "learn": "tsx --env-file=.env.local scripts/learn.ts",
-    "coach-bench": "tsx --env-file=.env.local scripts/coach-bench.ts"
+    "coach-bench": "tsx --env-file=.env.local scripts/coach-bench.ts",
+    "sound-lab": "tsx scripts/sound-lab.ts"
   },
   "dependencies": {
     "next": "16.3.6",

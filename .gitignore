@@ -32,3 +32,6 @@ next-env.d.ts
 
 # local Claude Code launch config
 /.claude/
+
+# sound-lab renders (scripts/sound-lab.ts)
+/sound-lab
