@@ -14,12 +14,16 @@ export default function GameCanvas({
   score,
   who,
   banner,
+  bannerTone = "hit",
+  replaying = false,
 }: {
   worldRef: RefObject<World>;
   hitRef: RefObject<boolean>;
   score: number;
   who: "jev" | "you";
   banner: string | null;
+  bannerTone?: "hit" | "good";
+  replaying?: boolean; // the playfield is showing a death's replay, not a live run
 }) {
   const ref = useRef<HTMLCanvasElement>(null);
   const whoRef = useRef(who);
@@ -63,9 +67,9 @@ export default function GameCanvas({
         <span className="hudLabel">SCORE</span>
         <span className="hudNum">{score}</span>
       </div>
-      <div className={`hud whoTag ${who}`}>{who === "jev" ? "JEV" : "YOU"}</div>
+      <div className={`hud whoTag ${replaying ? "replay" : who}`}>{replaying ? "REPLAY" : who === "jev" ? "JEV" : "YOU"}</div>
       {banner && (
-        <div className="hitBanner" role="status">
+        <div className={`hitBanner ${bannerTone}`} role="status">
           {banner}
         </div>
       )}

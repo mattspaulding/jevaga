@@ -672,6 +672,10 @@ body {
 .whoTag.you {
   color: var(--you-hi);
 }
+.whoTag.replay {
+  color: var(--gold);
+  border-color: var(--gold);
+}
 
 .hitBanner {
   position: absolute;
@@ -687,4 +691,8 @@ body {
   padding: 10px 20px;
   white-space: nowrap;
   text-shadow: 1px 1px 0 var(--shadow);
+}
+.hitBanner.good {
+  border-color: var(--gold);
+  color: var(--gold);
 }

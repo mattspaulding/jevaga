@@ -18,14 +18,15 @@ import {
 import { describeFight, describeMoves } from "@/lib/describe";
 import { driveWithJev, startRun, type Run, type RunEnd } from "@/lib/game/loop";
 import { randomSeed } from "@/lib/game/rng";
-import { newWorld, resetRun, type Move, type World } from "@/lib/game/world";
+import { newWorld, resetRun, SUBSTEP, type Move, type World } from "@/lib/game/world";
 import { afterDeath, Cancelled, emptyBook, type Book, type JudgeStep, type Verdict } from "@/lib/learn/judge";
-import { createRecorder } from "@/lib/learn/recorder";
-import { paced } from "@/lib/learn/replay";
+import { createRecorder, type Death } from "@/lib/learn/recorder";
+import { paced, playback, type ReplayResult } from "@/lib/learn/replay";
 import type { DecideInput, Decision } from "@/lib/system1/types";
 import type { CoachInput, Coaching } from "@/lib/system2/coach";
 
 const PAUSE_BETWEEN_RUNS_MS = 1500;
+const REPLAY_BANNER_MS = 1800; // how long "REPLAY · SURVIVED" stays up before the next run
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 async function post<T>(url: string, body: unknown, signal?: AbortSignal): Promise<T> {
@@ -69,6 +70,8 @@ export default function Game() {
   const [freshRule, setFreshRule] = useState<number | null>(null);
   const [runs, setRuns] = useState<RunRow[]>([]);
   const [banner, setBanner] = useState<string | null>(null); // "HIT · RUN 4 OVER", shown until the next run starts
+  const [bannerTone, setBannerTone] = useState<"hit" | "good">("hit");
+  const [replaying, setReplaying] = useState(false);
   // Each Start gets a run id; Stop bumps it, so an older loop still awaiting
   // something sees it has been stopped and never touches the page again.
   const runId = useRef(0);
@@ -125,11 +128,51 @@ export default function Game() {
     worldRef.current = w;
     hitRef.current = false;
     setBanner(null);
+    setBannerTone("hit");
+    setReplaying(false);
     setScore(0);
     const run = startRun(w, (world) => setScore(world.score));
     runRef.current = run;
     return run;
   }, [base]);
+
+  // Plays a tested replay on the playfield, from its recorded moves (no model
+  // calls), at game speed. What the viewer sees is exactly what the judge flew.
+  const playReplay = useCallback(
+    (death: Death, result: ReplayResult, stopped: () => boolean) =>
+      new Promise<void>((resolve) => {
+        const pb = playback(death, result);
+        worldRef.current = pb.world;
+        hitRef.current = false;
+        setBanner(null);
+        setReplaying(true);
+        setScore(pb.world.score);
+        let last = performance.now();
+        let carry = 0;
+        const timer = setInterval(() => {
+          if (stopped()) {
+            clearInterval(timer);
+            resolve();
+            return;
+          }
+          const now = performance.now();
+          carry += (now - last) / 1000;
+          last = now;
+          while (carry >= SUBSTEP && !pb.done()) {
+            carry -= SUBSTEP;
+            if (pb.step()) hitRef.current = true;
+          }
+          setScore(pb.world.score);
+          if (pb.done()) {
+            clearInterval(timer);
+            const same = JSON.stringify(pb.world) === JSON.stringify(result.final);
+            console.info(`[replay] run ${death.run}: ${result.outcome}; playback matches the tested replay: ${same}`);
+            resolve();
+          }
+        }, 16);
+      }),
+    [],
+  );
 
   const finishRun = useCallback((end: RunEnd, who: Mode, kills: number, rules: number | null) => {
     runCount.current += 1;
@@ -231,6 +274,16 @@ export default function Game() {
               setFreshRule(kept.change.kind === "replace" ? kept.change.n - 1 : v.book.rules.length - 1);
               setTimeout(() => setFreshRule(null), 1200);
             }
+            // Show the replay that was tested (with the kept rule, or the last rule tried).
+            if (v.shown) {
+              await playReplay(v.death, v.shown.result, stopped);
+              if (stopped()) return;
+              const survived = v.shown.result.outcome === "survived";
+              setBannerTone(survived ? "good" : "hit");
+              setBanner(survived ? "REPLAY · SURVIVED" : "REPLAY · HIT");
+              await sleep(REPLAY_BANNER_MS);
+              if (stopped()) return;
+            }
           } catch (e) {
             if (e instanceof Cancelled || stopped()) return;
             setJudgeStep(null);
@@ -240,7 +293,7 @@ export default function Game() {
         await sleep(PAUSE_BETWEEN_RUNS_MS);
       }
     },
-    [base, newRun, finishRun],
+    [base, newRun, finishRun, playReplay],
   );
 
   const start = useCallback(() => {
@@ -254,6 +307,7 @@ export default function Game() {
     runId.current++;
     runRef.current?.stop();
     setJudgeStep(null);
+    setReplaying(false);
     setStatus("stopped");
   }, []);
 
@@ -268,7 +322,7 @@ export default function Game() {
 
   return (
     <main className="layout">
-      <GameCanvas worldRef={worldRef} hitRef={hitRef} score={score} who={mode} banner={banner} />
+      <GameCanvas worldRef={worldRef} hitRef={hitRef} score={score} who={mode} banner={banner} bannerTone={bannerTone} replaying={replaying} />
       <aside className="panel">
         <div className="titleRow">
           <h1 className="title">JEVAGA</h1>

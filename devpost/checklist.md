@@ -99,7 +99,7 @@ Build mode: fast (chosen 2026-09-25)
   Learner check: Start from an empty rulebook and watch five or six runs. Do the rules read like sensible lessons from the deaths you just saw, and does Jev last longer?
   Commit: `Jev learns a rule from each death`
 
-- [ ] **10. The replay plays on the playfield**
+- [x] **10. The replay plays on the playfield**
   Becomes usable: Between runs the playfield replays the last seconds before the death with the tested rules, tagged REPLAY, ending on "REPLAY · SURVIVED" or "REPLAY · HIT"; then the next run starts.
   Why now: It is the moment the video needs, and it only makes sense once rules are being tested.
   PRD ref: `prd.md > Jev learns from its deaths (System 2)`, `prd.md > Look and Feel`
