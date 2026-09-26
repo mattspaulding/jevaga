@@ -3,113 +3,106 @@ doc: prd
 status: approved
 ---
 
-# Go Frog Go: Product Requirements
+# Jeviga: Product Requirements
 
-A 16-bit pixel-art endless road-crossing game in the browser. A frog is played by a fast decision model (Jev) that starts knowing only "jump forward," and a reasoning LLM (Nemotron) teaches it after every death. Built for developers curious about Jev-style "System One" models, and for Matt, who wants to learn how they work under an LLM.
+A Galaga-style shooter in the browser. Jev flies the ship in real time; NVIDIA Nemotron on Nebius writes the plan it follows. You can fly it too. For developers curious about Jev-style "System One" models, and for Matt, who wants to learn how they work under an LLM.
 Source: `scope.md > The Unique Kernel`, `scope.md > Who It's For`.
+
+*(Replaces the Go Frog Go PRD on 2026-09-26; see `scope.md`.)*
 
 ## The Core Journey
 Source: `scope.md > The Core Loop`.
 
-1. The viewer opens the page. The game sits on the left, the frog on the starting grass. The right panel shows a playbook with one line, "1. Jump forward," and "Run 1".
-2. They press **Start**. The frog begins moving up the road on its own, one hop per beat.
-3. Each beat, the right panel shows Jev's pick and confidence, e.g. `forward 0.97`, with a bar.
-4. In run 1 the frog follows its only instruction and hops straight into traffic. The run ends and its distance is added to the run history.
-5. The coach panel shows "thinking…" while Nemotron reads the moves before the hit and what hit the frog. It writes one short lesson, which appears in the playbook, numbered.
-6. The next run starts automatically after a short pause. Jev plays with the whole playbook.
-7. Runs continue until the viewer presses **Stop**. Success is visible in two places: the playbook growing, and distances climbing across runs.
+1. The viewer opens the page. The playfield is on the left: stars, the enemy formation at the top, the ship at the bottom. The panel is on the right, with a Who plays switch (Jev plays / You play) and Start.
+2. **Jev plays** (default). They press Start. The formation starts drifting; the ship begins moving on its own.
+3. About four times a second the JEV window shows Jev's move (left, right, stay, fire), its confidence, all four probabilities, and how long the answer took.
+4. Every few seconds the NEMOTRON window shows a new plan, one or two sentences, with how many seconds ago it was written. Jev's next moves follow it.
+5. An enemy breaks formation and dives, firing. Jev dodges or doesn't. Shots that hit enemies score.
+6. A bullet or a diver hits the ship. The run ends, a HIT banner shows, the run joins the RUNS list with its score, and after a short pause the next run starts. Runs continue until Stop.
+7. **You play**: switch, press Start, and fly with ← → (or A D) and Space to fire. One run per Start.
 
 ## Screens and Layout
-- **Who plays** (added during `5-build`): a switch between "Jev plays" and "You play". You play with arrow keys or WASD on the same clock; no key that beat means the frog waits. The coach and playbook are Jev's; your runs are listed as "you".
-One screen, split in two (layout B).
-
-- **Left, about half the width: the game.** Top-down view. The road scrolls upward as the frog advances, so it never runs out. Distance counter in the corner.
-- **Right: inside its head.** Top to bottom:
-  - **Decision:** Jev's current pick, with its confidence as a number and a bar.
-  - **Coach:** idle during a run, "thinking…" after a death, then "new lesson."
-  - **Playbook:** numbered lessons, starting with "1. Jump forward." Newest at the bottom, briefly highlighted when it arrives.
-  - **Runs:** each run's number and distance, best highlighted.
-- **Controls:** Start / Stop.
+One screen, as on the design canvas.
+- **Left: the playfield**, 9 columns wide. The ship slides between columns along the bottom row. HUD: score, and a tag saying who's flying (YOU / JEV).
+- **Right: the panel**, top to bottom:
+  - **Who plays** switch.
+  - Jev mode: **JEV** window (move, confidence meter, four probability bars, answer time), **NEMOTRON** window (current plan and its age), **RUNS** list.
+  - You mode: **YOU** window (last key, key legend), **RUNS** list.
+  - **Controls**: Start / Stop. A status chip by the title shows outages.
 
 ## Look and Feel
-Source: `scope.md > Inspiration & Identity`. Matt picked style B and the frog from a live sample.
-
-- 16-bit SNES-era pixel art: rich palette, dark sprite outlines, shaded lower edges, textured two-tone grass.
-- Frog player character. Cars in several colors on dark asphalt with yellow dashed lane lines. Trees on grass strips.
-- Crossy Road's endless hopping with Frogger's close calls: cars glide smoothly across the screen and the frog hops the instant you press. Original sprites and name only.
-- The right panel matches: 16-bit RPG-style windows (a white bevelled frame over a banded fill tinted per model: Jev blue, Nemotron purple, you green), Pixelify Sans text with Jersey 20 numbers, gold for the chosen move and the best run. A tag on the game says who has the frog (YOU / JEV). Settled on the design canvas 2026-09-26; every value is in `design-handoff.md`.
+Source: `scope.md > Inspiration & Identity`, `design-handoff.md`.
+- The panel is exactly the design-canvas panel: 16-bit RPG windows tinted per player (Jev blue, Nemotron purple, you green), Pixelify Sans and Jersey 20, gold for the chosen move and the best run, the banded navy page. All values in `design-handoff.md`.
+- The playfield is 16-bit SNES-era pixel art on a dark starfield: a player ship, two or three enemy types in the formation, a distinct look for a diver, player shots and enemy bullets that read clearly at a glance, a small explosion. Original designs only. Derived by the build from the handoff palette and sprite style (Matt, 2026-09-26: "you derive the sprites"); the frog-game grids in `design-handoff.md` no longer apply.
 
 ## Features and Behavior
 
-### Endless road
-- Lanes are generated ahead of the frog forever: grass strips and runs of road lanes, cars at varied speeds and directions.
-- The frog moves on a grid: forward, left, right, back, or wait.
-- [ ] Pressing Start sends the frog up the road with no human input.
-- [ ] The road keeps generating; there is no finish line.
-- [ ] A car touching the frog ends the run.
+### The fight
+- A formation of enemies (3 rows) drifts left and right across the top.
+- Every few seconds an enemy breaks off and dives toward the ship's column, firing one or two bullets on the way down. Divers that miss fly off the bottom and return to the formation.
+- The ship sits on the bottom row and slides one column per move. It fires straight up; there's a short reload between shots.
+- A shot that reaches an enemy destroys it: 100 points, 200 for a diver. A cleared formation brings a new one.
+- [ ] Enemies drift, dive and fire without any input.
+- [ ] A shot destroys the enemy it reaches; the score goes up.
+- [ ] A bullet or diver touching the ship ends the run.
 
-### Fast decisions (System 1)
-Source: `scope.md > The POC Boundary`.
-- Each beat, Jev is asked which of the five moves to make, given the nearby lanes, the cars in them, and the playbook.
-- It answers with a move and a confidence. Jev makes every move in every run.
-- Jev is reached through a swappable adapter; an offline stand-in (labeled SIMULATED) uses the same shape for building without a key.
-- [ ] Every hop shows its move and confidence in the Decision panel.
-- [ ] With only "jump forward" in the playbook, the frog hops forward into traffic.
+### Jev flies (System 1)
+- About four times a second, Jev reads the screen as text and chooses left, right, stay or fire, with a probability for each.
+- The screen keeps moving while Jev thinks; its move is applied the instant the answer lands.
+- The plan from Nemotron is Jev's instructions.
+- [ ] Every Jev move shows its choice, confidence, four probabilities and answer time.
+- [ ] Jev uses all four moves in a normal run, not only fire.
 
-### Coach lessons (System 2)
-Source: `scope.md > The Unique Kernel`.
-- The coach never moves the frog. It only teaches, and only after a death.
-- After a hit, Nemotron sees the last several moves and what hit the frog, and writes one lesson of a sentence or less.
-- The lesson joins the playbook, and Jev plays every later run with the whole playbook.
-- [ ] A new numbered lesson appears after each death.
-- [ ] Lessons are specific to what happened ("wait when a car is two tiles away in the next lane"), not generic.
-- [ ] The run after a lesson visibly handles the situation that caused the last death.
+### Nemotron plans (System 2)
+- Every few seconds, Nemotron reads the whole fight (formation, divers, bullets, the ship, score) and writes a plan of one or two sentences in the game's own words.
+- The plan replaces Jev's instructions immediately.
+- [ ] A new plan appears every few seconds during a run, with its age.
+- [ ] When a plan says to dodge or move somewhere, Jev's next moves visibly follow it.
 
-### Run history
-- [ ] Each run's distance is listed; the best run is highlighted.
-- [ ] Over a demo of several runs, later distances are clearly higher than run 1.
+### You fly
+- ← → or A D slide the ship; Space fires. Same rules and speed as Jev.
+- [ ] Keys act instantly.
+
+### Runs
+- [ ] Each run is listed with who flew it and its score; the best is marked.
 
 ## States and Boundaries
-- **Before Start:** frog on the starting grass, playbook with "1. Jump forward," "Run 1", Start button.
-- **Coach thinking:** between runs, after a death. If the coach errors or takes too long, the next run starts without a new lesson and the panel says so.
-- **Model unavailable:** if Jev can't be reached, the game doesn't start and the panel says which model is down. Nothing pretends to play.
-- **Stalled:** if the frog makes no forward progress for 15 beats, the run ends as a timeout and the coach teaches from it like a death. *(Added during `4-spec`, approved by Matt.)*
-- **Stopped:** the current run ends; playbook and history stay on screen.
-- **Reload:** everything resets to "jump forward." Nothing is saved between visits.
+- **Before Start:** formation shown still, ship at the bottom center, empty run list.
+- **Jev unavailable:** the game doesn't start, or pauses mid-run, and the chip by the title says so. Nothing pretends to play.
+- **Nemotron unavailable or slow:** Jev keeps flying on the last plan (or the starting plan), and the Nemotron window says the plan is stale.
+- **Stopped:** the run ends; the run list stays.
+- **Reload:** everything resets.
 
 ## Product Decisions
-- Named **Go Frog Go** by Matt (2026-09-25). The project lives in `Strawberry/GoFrogGo` and deploys under the Strawberry Digital Vercel team.
-- Start from nothing. The playbook begins as "jump forward" so run 1 dies and the coach builds instructions from real deaths. Matt: "then over time after run after run, it gets better and better."
-- Coach teaches only after deaths; no mid-run takeover. Matt chose this so the early runs actually fail and the learning is visible. This revised the scope's kernel.
-- Layout B, game left and thinking right, so the viewer sees the model's decisions and the playbook next to the frog.
-- 16-bit style and the frog. Matt picked both from a live sample.
-- Real time for everyone: the world never waits for a decision. If Jev hasn't answered by the next tick, the frog waits that beat, and the panel counts it. Matt: "it has to be real time… That's the whole point of using Jev." An outage (an error, not slowness) pauses the clock instead.
-- Built on Jev. Matt chose Jev or nothing, with no fallback model; Jev turned out to be available through Vercel AI Gateway without the waitlist. *(Updated during `4-spec`; the PRD first planned CLM-8B behind a Jev-shaped adapter.)*
+- Galaga-style shooter instead of the frog game (Matt, 2026-09-26). Named **Jeviga** by Matt.
+- Nemotron is a live strategist, not a between-runs teacher (Matt picked this direction after learning between runs proved too noisy).
+- Real time for everyone, carried over: the game never waits for a decision.
+- Keyboard play, carried over.
+- The design-canvas panel, carried over; new space sprites to be drawn on the canvas.
+- Jev through Vercel AI Gateway on the paid tier, about four decisions a second.
 
-**Assumptions to confirm in review:**
-- Runs restart automatically until Stop, so a demo video can be one continuous take.
-- Nothing persists between page loads.
+**Assumptions, approved with the PRD (Matt: "go build it"):**
+- One hit ends a run (no lives yet).
+- Plans every ~3 seconds.
+- Moves are left, right, stay, fire (no move-and-fire in one decision).
 
 ## What We're Building
-One screen with the endless road game, the frog run by Jev starting from "jump forward," a lesson from Nemotron after each death, and the four-part right panel. Enough to record a video where the playbook grows and distance climbs across runs.
+One screen: the shooter, Jev flying it in real time, Nemotron's live plans, keyboard play, the run list, and the design-canvas look.
 
 ## Deferred From the POC
-- **Hosted public URL and open-source license.** Nebius needs these by Oct 30; Basics doesn't. Do them after Basics closes Oct 26.
-- **Saving the playbook between visits.** Would mean storage; a reload reset is fine for a demo.
+- **Hosted URL and license** for Nebius (after Basics closes Oct 26).
+- **Saving scores** between visits.
 
 ## Possible Later Enhancements
-- Race Jev against another System One model (such as the open CLM-8B) on the same road, with the same playbook.
-- Rivers, logs and trains, so old lessons stop being enough.
-- Race: you and Jev on the same road at the same time.
-- Sound and music.
-- Let the coach step in mid-run once the playbook is mature.
+- Waves that speed up, lives, power-ups.
+- You vs Jev side by side on the same wave.
+- A short Nemotron recap after each run.
+- Sound.
 
 ## Non-Goals
-- Any Nintendo, Crossy Road or Tetris names or art: third-party IP.
-- Reading the game from pixels: the game hands its state to Jev directly.
-- Training or fine-tuning a model: the frog improves through the playbook, not weights.
-- Raspberry Pi hardware.
+- Galaga's name, art or sounds.
+- Reading the game from pixels.
+- Training or fine-tuning a model.
 
 ## Open Questions
-- **How fast Jev answers.** Measured in build step 1; the game waits for each move, so speed changes pacing, not correctness.
-- **Whether lessons alone move the distance enough.** Can only be answered by building it. If the playbook stops helping after a few lessons, that's a finding for the video, not a failure.
+- **Folder and repo name**: the project folder is still `GoFrogGo`.

@@ -39,29 +39,60 @@ Build mode: fast (chosen 2026-09-25)
   Learner check: Press Start and let it run for four or five runs. Watch run 1 die, read the coach's rule, and see whether the next run handles that spot. Does the playbook read like real lessons, and does the distance climb?
   Commit: `Coach writes lessons and runs replay with the playbook`
 
-- [ ] **4. It looks like a 16-bit game**
-  Becomes usable: The road, cars, trees and frog are outlined, shaded 16×16 pixel sprites in the style-B palette you picked; the panel is the 16-bit window design from the canvas (Pixelify Sans, Jersey 20 numbers, tinted RPG windows) and names each model ("JEV · VIA VERCEL AI GATEWAY", "NEMOTRON · NEBIUS TOKEN FACTORY"); a HUD tag says who has the frog; hits show a splat and a HIT banner; new rules flash.
-  Why now: The look matters for the video, but it's safest after the behavior works, so styling never hides a logic bug.
-  PRD ref: `prd.md > Look and Feel`, `prd.md > Screens and Layout`
-  Spec ref: `spec.md > Look and Feel`, `spec.md > Game canvas`, `spec.md > Panel`
-  Build: copy the sprite grids from `devpost/design-handoff.md` into `lib/game/sprites.ts` (frog, cars in two lengths and two directions, tree, splat, grass tile) with a letter-to-color legend; update `render.ts` (grass tile, curbs, dashes, trees from the row rng, splat); Pixelify Sans and Jersey 20 via `next/font/google`; tokens, banded background, window, meter, switch, button and chip styles in `app/globals.css` per the handoff; panel restyle including the keypad legend in You mode, the "JEV'S PLAYBOOK" strip, the NEW RULE tag, the between-runs countdown line, HUD tags and the HIT banner.
-  Verify (mechanical): `pnpm build` passes; screenshot the running game in the browser pane and check it against `design-handoff.md` (palette, sprite grids, window recipe); the page text contains both model labels; no console errors.
-  Learner check: Open the game and compare it with the design canvas ("Go Frog Go — Play & Jev mode"). Does it feel like the same game, and does the frog read clearly as a frog?
-  Commit: `Add 16-bit sprites and styled panel`
+- [ ] **4. You can fly Jeviga with the keyboard**
+  Becomes usable: Open localhost:3000, switch to You play, press Start: the formation drifts, divers swoop and fire, bullets fall, and you slide with ← → (or A D) and fire with Space. Shots destroy enemies and score; one hit ends the run and it joins RUNS.
+  Why now: The game has to exist and feel right before any model flies it. It replaces the frog world and exercises the physics timer, prediction and keyboard path the later slices reuse.
+  PRD ref: `prd.md > The fight`, `prd.md > You fly`, `prd.md > Runs`
+  Spec ref: `spec.md > The fight`, `spec.md > Panel and playfield`, `spec.md > Data Model`
+  Build: Rewrite `lib/game/world.ts` as the shooter (ship, formation drift, dives, formation fire, bullets, shots, hits, waves, `threatAt`, `shotTime`); adapt `startRun` in `lib/game/loop.ts` (`act(move)` instead of `hop`); plain-shape `render.ts`; You mode in `Game.tsx` (← → A D, Space); RUNS shows score. Rewrite `scripts/world-check.ts` for the shooter.
+  Verify (mechanical): `pnpm world-check` passes (drift, dive steering, bullets per column, shot kills, ship hit, reload, prediction agrees with simulation); `pnpm build` and lint pass; in the browser pane a keyboard run moves, fires, scores and ends on a hit; no console errors.
+  Learner check: Switch to You play and fly a few runs. Is it fun, and is the pace right?
+  Commit: `Jeviga: the shooter, flown with the keyboard`
 
-- [ ] **5. It fails honestly and can run offline**
-  Becomes usable: If Jev is down, Start shows "Jev unavailable" and the game doesn't start; mid-run it pauses and retries every 3 seconds; a failed lesson says so and the next run starts with the playbook unchanged. `SYSTEM1=fake` plays with the SIMULATED badge. A README explains setup and how each model is used.
-  Why now: The main path is proven, so this makes the demo URL safe to leave running through judging and makes offline work possible, without touching the kernel.
+- [ ] **5. Jev flies Jeviga, and a plan changes its moves**
+  Becomes usable: Jev mode flies the ship in real time with the JEV window showing each move (left, right, stay, fire), confidence, four probabilities and answer time. `pnpm plan-test` shows whether a written plan changes Jev's choice in frozen fights.
+  Why now: The risk: does Jev read the fight well enough to dodge and aim, and does a plan steer it? Checked before the strategist is built.
+  PRD ref: `prd.md > Jev flies (System 1)`
+  Spec ref: `spec.md > Describing the fight to Jev`, `spec.md > Jev flies (System 1)`
+  Build: `lib/describe.ts` (`describeFight`, `describeMoves`); moves become `left | right | stay | fire` across `system1/*` and `/api/move`; instructions carry a plan; `driveWithJev` acts on answers; `scripts/plan-test.ts` (bullet-incoming vs safe fights; "dodge first" vs "keep firing"); update `scripts/sim.ts`.
+  Verify (mechanical): `pnpm plan-test`: with a dodge plan Jev moves out of an incoming bullet's column, with a fire plan it fires when safe; in the browser pane Jev uses at least three different moves in a run and scores; no console errors.
+  Learner check: Watch Jev fly a few runs. Does it dodge, and does it look like it's deciding?
+  Commit: `Jev flies Jeviga`
+
+- [ ] **6. Nemotron plans live and Jev follows**
+  Becomes usable: During a Jev run the NEMOTRON window shows a new plan every ~3 s with its age; Jev's instructions change with it; runs repeat until Stop.
+  Why now: This is the kernel. It needs Jev flying first.
+  PRD ref: `prd.md > Nemotron plans (System 2)`, `prd.md > The Core Journey`
+  Spec ref: `spec.md > Nemotron plans (System 2)`
+  Build: `lib/system2/planner.ts`, `app/api/plan/route.ts`, `drivePlanner` in `loop.ts`, NEMOTRON window with stale marker; retire `app/api/lesson`, `lib/game/coachMemory.ts`, the lesson coach and `scripts/lesson-test.ts`.
+  Verify (mechanical): `curl /api/plan` returns a plan in the game's words; in the browser pane plans refresh every ~3 s during a run and Jev's instructions change; Nemotron failure leaves Jev flying on a stale plan.
+  Learner check: Watch a run with the Nemotron window. Can you see Jev's moves change after a new plan?
+  Commit: `Nemotron plans live for Jev`
+
+- [ ] **7. It looks like a 16-bit game**
+  Becomes usable: The design-canvas panel from `design-handoff.md` (RPG windows, Pixelify Sans, Jersey 20, gold highlights, HUD tag, HIT banner) and derived space sprites: ship, three enemy types, diver, shots, bullets, explosion, starfield.
+  Why now: After the behavior works, so styling never hides a logic bug.
+  PRD ref: `prd.md > Look and Feel`, `prd.md > Screens and Layout`
+  Spec ref: `spec.md > Look and Feel`, `spec.md > Panel and playfield`
+  Build: `lib/game/sprites.ts` with outline and bottom-row shading in the handoff palette; `render.ts`; fonts and tokens per the handoff; panel restyle.
+  Verify (mechanical): `pnpm build` passes; screenshot checked against `design-handoff.md`; both model labels in page text; no console errors.
+  Learner check: Does it look like the design canvas, and do ship, enemies and bullets read at a glance?
+  Commit: `Jeviga: 16-bit sprites and styled panel`
+
+- [ ] **8. It fails honestly and can run offline**
+  Becomes usable: Outage states verified end to end; `SYSTEM1=fake` flies with the SIMULATED badge; README explains setup and how Jev and Nemotron are each used; `.env.example` complete.
+  Why now: Makes the live URL safe to leave up through judging.
   PRD ref: `prd.md > States and Boundaries`
-  Spec ref: `spec.md > Important Failure Modes`, `spec.md > Fast decisions (System 1)`, `spec.md > Where It Runs and How Someone Tries It`
-  Build: Error and retry states in the loop and panel; lesson failure path in the UI; SIMULATED badge; README with setup, run steps and a plain account of Jev and Nemotron; `.env.example` complete.
-  Verify (mechanical): Run with a deliberately wrong `AI_GATEWAY_API_KEY` and confirm the page shows "Jev unavailable" and does not start; run with a wrong `NEBIUS_API_KEY` and confirm the lesson failure message and that the next run starts; run with `SYSTEM1=fake` and confirm the SIMULATED badge; restore keys and confirm a normal run.
-  Learner check: Set `SYSTEM1=fake` in `.env.local`, restart, press Start, and check the SIMULATED badge is obvious. Then set it back to `jev`.
+  Spec ref: `spec.md > Important Failure Modes`, `spec.md > Where It Runs and How Someone Tries It`
+  Build: fake adapted to four moves; README; `.env.example`.
+  Verify (mechanical): wrong gateway key → "Jev unavailable" and no start; wrong Nebius key → Jev flies on a stale plan; `SYSTEM1=fake` shows SIMULATED; restore keys, normal run.
+  Learner check: Set `SYSTEM1=fake`, restart, press Start, check SIMULATED is obvious; set it back.
   Commit: `Handle model failures and add offline mode`
 
 ## Hands-on Checkpoints
 
-- [ ] Early usable behavior explored: after slice 3, when the frog learns from the coach (the point where feedback can still reshape the kernel and the look)
+- [x] Early usable behavior explored: after slice 3 (frog game). Matt's feedback led to real time, keyboard play, the continuous rebuild, the paid gateway tier, and finally the switch to Jeviga.
+- [ ] Jeviga early check: after slice 6, when Nemotron's plans steer Jev
 - [ ] Final kick-the-tires exploration and feedback completed
 
 ## Final Review
@@ -95,3 +126,4 @@ Activity mode:
 - Look settled on the design canvas (2026-09-26): SNES-era stays, an N64 low-poly look was considered and dropped; the panel becomes 16-bit RPG windows with Pixelify Sans and Jersey 20 in place of Press Start 2P. Sprites, palette and every panel value live in `devpost/design-handoff.md`, extracted from the canvas so slice 4 builds from it instead of re-inventing them.
 - Jev's "unavailable" was AI Gateway's free-tier rate limit (~25-30 requests a minute, surfacing as 503s), not TypeSafe downtime — measured 29/40 at 1/s and 4/30 at 2/s on the free tier, then 120/120 up to 4/s after Matt bought gateway credit for the Strawberry Digital team. Jev is asked up to 4 times a second again.
 - The coach edits the playbook instead of appending to it: one add/replace/remove per run, at most 4 rules above a fixed "Otherwise, jump forward." — Matt picked option 1 after the playbook grew to 10 contradictory rules. Asking Nemotron to rewrite the whole list failed (it rewrote every rule and invented its own vocabulary), so the code applies a single edit. Seed 13 then climbed 2 → 7 → 16 → 32 → 32 before later edits regressed it.
+- Switched from the frog game to Jeviga, a Galaga-style shooter, with Nemotron as a live strategist instead of a between-runs teacher — Matt, 2026-09-26: Jev only ever waited or hopped forward, which wasn't interesting to watch, and learning between runs was too noisy (the same playbook scored 7 to 32). Slices 1–3 stay as history; slices 4–8 are rewritten for the shooter. Scope, PRD and spec rewritten and approved ("Jeviga, you derive the sprites, go build it").
