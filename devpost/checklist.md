@@ -39,7 +39,7 @@ Build mode: fast (chosen 2026-09-25)
   Learner check: Press Start and let it run for four or five runs. Watch run 1 die, read the coach's rule, and see whether the next run handles that spot. Does the playbook read like real lessons, and does the distance climb?
   Commit: `Coach writes lessons and runs replay with the playbook`
 
-- [ ] **4. You can fly Jeviga with the keyboard**
+- [ ] **4. You can fly Jevaga with the keyboard**
   Becomes usable: Open localhost:3000, switch to You play, press Start: the formation drifts, divers swoop and fire, bullets fall, and you slide with ← → (or A D) and fire with Space. Shots destroy enemies and score; one hit ends the run and it joins RUNS.
   Why now: The game has to exist and feel right before any model flies it. It replaces the frog world and exercises the physics timer, prediction and keyboard path the later slices reuse.
   PRD ref: `prd.md > The fight`, `prd.md > You fly`, `prd.md > Runs`
@@ -47,9 +47,9 @@ Build mode: fast (chosen 2026-09-25)
   Build: Rewrite `lib/game/world.ts` as the shooter (ship, formation drift, dives, formation fire, bullets, shots, hits, waves, `threatAt`, `shotTime`); adapt `startRun` in `lib/game/loop.ts` (`act(move)` instead of `hop`); plain-shape `render.ts`; You mode in `Game.tsx` (← → A D, Space); RUNS shows score. Rewrite `scripts/world-check.ts` for the shooter.
   Verify (mechanical): `pnpm world-check` passes (drift, dive steering, bullets per column, shot kills, ship hit, reload, prediction agrees with simulation); `pnpm build` and lint pass; in the browser pane a keyboard run moves, fires, scores and ends on a hit; no console errors.
   Learner check: Switch to You play and fly a few runs. Is it fun, and is the pace right?
-  Commit: `Jeviga: the shooter, flown with the keyboard`
+  Commit: `Jevaga: the shooter, flown with the keyboard`
 
-- [ ] **5. Jev flies Jeviga, and a plan changes its moves**
+- [ ] **5. Jev flies Jevaga, and a plan changes its moves**
   Becomes usable: Jev mode flies the ship in real time with the JEV window showing each move (left, right, stay, fire), confidence, four probabilities and answer time. `pnpm plan-test` shows whether a written plan changes Jev's choice in frozen fights.
   Why now: The risk: does Jev read the fight well enough to dodge and aim, and does a plan steer it? Checked before the strategist is built.
   PRD ref: `prd.md > Jev flies (System 1)`
@@ -57,7 +57,7 @@ Build mode: fast (chosen 2026-09-25)
   Build: `lib/describe.ts` (`describeFight`, `describeMoves`); moves become `left | right | stay | fire` across `system1/*` and `/api/move`; instructions carry a plan; `driveWithJev` acts on answers; `scripts/plan-test.ts` (bullet-incoming vs safe fights; "dodge first" vs "keep firing"); update `scripts/sim.ts`.
   Verify (mechanical): `pnpm plan-test`: with a dodge plan Jev moves out of an incoming bullet's column, with a fire plan it fires when safe; in the browser pane Jev uses at least three different moves in a run and scores; no console errors.
   Learner check: Watch Jev fly a few runs. Does it dodge, and does it look like it's deciding?
-  Commit: `Jev flies Jeviga`
+  Commit: `Jev flies Jevaga`
 
 - [ ] **6. Nemotron plans live and Jev follows**
   Becomes usable: During a Jev run the NEMOTRON window shows a new plan every ~3 s with its age; Jev's instructions change with it; runs repeat until Stop.
@@ -77,7 +77,7 @@ Build mode: fast (chosen 2026-09-25)
   Build: `lib/game/sprites.ts` with outline and bottom-row shading in the handoff palette; `render.ts`; fonts and tokens per the handoff; panel restyle.
   Verify (mechanical): `pnpm build` passes; screenshot checked against `design-handoff.md`; both model labels in page text; no console errors.
   Learner check: Does it look like the design canvas, and do ship, enemies and bullets read at a glance?
-  Commit: `Jeviga: 16-bit sprites and styled panel`
+  Commit: `Jevaga: 16-bit sprites and styled panel`
 
 - [ ] **8. It fails honestly and can run offline**
   Becomes usable: Outage states verified end to end; `SYSTEM1=fake` flies with the SIMULATED badge; README explains setup and how Jev and Nemotron are each used; `.env.example` complete.
@@ -91,8 +91,8 @@ Build mode: fast (chosen 2026-09-25)
 
 ## Hands-on Checkpoints
 
-- [x] Early usable behavior explored: after slice 3 (frog game). Matt's feedback led to real time, keyboard play, the continuous rebuild, the paid gateway tier, and finally the switch to Jeviga.
-- [ ] Jeviga early check: after slice 6, when Nemotron's plans steer Jev
+- [x] Early usable behavior explored: after slice 3 (frog game). Matt's feedback led to real time, keyboard play, the continuous rebuild, the paid gateway tier, and finally the switch to Jevaga.
+- [ ] Jevaga early check: after slice 6, when Nemotron's plans steer Jev
 - [ ] Final kick-the-tires exploration and feedback completed
 
 ## Final Review
@@ -126,4 +126,4 @@ Activity mode:
 - Look settled on the design canvas (2026-09-26): SNES-era stays, an N64 low-poly look was considered and dropped; the panel becomes 16-bit RPG windows with Pixelify Sans and Jersey 20 in place of Press Start 2P. Sprites, palette and every panel value live in `devpost/design-handoff.md`, extracted from the canvas so slice 4 builds from it instead of re-inventing them.
 - Jev's "unavailable" was AI Gateway's free-tier rate limit (~25-30 requests a minute, surfacing as 503s), not TypeSafe downtime — measured 29/40 at 1/s and 4/30 at 2/s on the free tier, then 120/120 up to 4/s after Matt bought gateway credit for the Strawberry Digital team. Jev is asked up to 4 times a second again.
 - The coach edits the playbook instead of appending to it: one add/replace/remove per run, at most 4 rules above a fixed "Otherwise, jump forward." — Matt picked option 1 after the playbook grew to 10 contradictory rules. Asking Nemotron to rewrite the whole list failed (it rewrote every rule and invented its own vocabulary), so the code applies a single edit. Seed 13 then climbed 2 → 7 → 16 → 32 → 32 before later edits regressed it.
-- Switched from the frog game to Jeviga, a Galaga-style shooter, with Nemotron as a live strategist instead of a between-runs teacher — Matt, 2026-09-26: Jev only ever waited or hopped forward, which wasn't interesting to watch, and learning between runs was too noisy (the same playbook scored 7 to 32). Slices 1–3 stay as history; slices 4–8 are rewritten for the shooter. Scope, PRD and spec rewritten and approved ("Jeviga, you derive the sprites, go build it").
+- Switched from the frog game to Jevaga, a Galaga-style shooter, with Nemotron as a live strategist instead of a between-runs teacher — Matt, 2026-09-26: Jev only ever waited or hopped forward, which wasn't interesting to watch, and learning between runs was too noisy (the same playbook scored 7 to 32). Slices 1–3 stay as history; slices 4–8 are rewritten for the shooter. Scope, PRD and spec rewritten and approved ("Jevaga, you derive the sprites, go build it").

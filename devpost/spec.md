@@ -3,7 +3,7 @@ doc: spec
 status: approved
 ---
 
-# Jeviga: Technical Spec
+# Jevaga: Technical Spec
 
 *(Replaces the Go Frog Go spec on 2026-09-26. The stack, the real-time engine, the Jev and Nemotron connections, keyboard play, outage handling and the design-canvas panel carry over; the game world, what Jev reads, and the coach's job change. The frog-game spec is in git history.)*
 
@@ -131,8 +131,8 @@ Unchanged: Jev at `POST https://ai-gateway.vercel.sh/typesafe/v1/systemone` (pai
 - **Same seed per session.** The formation and dive order repeat, so runs are comparable.
 
 ## Decisions and Open Issues
-**Matt's decisions:** switch to a Galaga-style shooter (2026-09-26); name Jeviga; Nemotron as a live strategist; real time and keyboard play carried over; design-canvas panel carried over.
+**Matt's decisions:** switch to a Galaga-style shooter (2026-09-26); name Jevaga; Nemotron as a live strategist; real time and keyboard play carried over; design-canvas panel carried over.
 
-**Useful unknown, carried from the frog game:** how does a written plan change Jev's move? Answered for rules in the frog game (one rule moved "wait" from 0.19 to 0.93). For Jeviga, build step 1 checks the same thing for plans with `scripts/plan-test.ts`: in a frozen fight where a bullet reaches your column in 0.3 s with an enemy above, does "dodge first" make Jev move and "keep firing" make it fire?
+**Useful unknown, carried from the frog game:** how does a written plan change Jev's move? Answered for rules in the frog game (one rule moved "wait" from 0.19 to 0.93). For Jevaga, build step 1 checks the same thing for plans with `scripts/plan-test.ts`: in a frozen fight where a bullet reaches your column in 0.3 s with an enemy above, does "dodge first" make Jev move and "keep firing" make it fire?
 
-**Open:** whether to rename the `GoFrogGo` folder and repo to `Jeviga`.
+**Open:** whether to rename the `GoFrogGo` folder and repo to `Jevaga`.

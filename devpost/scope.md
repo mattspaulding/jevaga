@@ -3,7 +3,7 @@ doc: scope
 status: approved
 ---
 
-# Jeviga
+# Jevaga
 
 A Galaga-style space shooter in the browser, played in real time by Jev while NVIDIA Nemotron on Nebius calls the strategy. You can play it yourself too.
 

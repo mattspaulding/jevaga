@@ -3,7 +3,7 @@ doc: prd
 status: approved
 ---
 
-# Jeviga: Product Requirements
+# Jevaga: Product Requirements
 
 A Galaga-style shooter in the browser. Jev flies the ship in real time; NVIDIA Nemotron on Nebius writes the plan it follows. You can fly it too. For developers curious about Jev-style "System One" models, and for Matt, who wants to learn how they work under an LLM.
 Source: `scope.md > The Unique Kernel`, `scope.md > Who It's For`.
@@ -74,7 +74,7 @@ Source: `scope.md > Inspiration & Identity`, `design-handoff.md`.
 - **Reload:** everything resets.
 
 ## Product Decisions
-- Galaga-style shooter instead of the frog game (Matt, 2026-09-26). Named **Jeviga** by Matt.
+- Galaga-style shooter instead of the frog game (Matt, 2026-09-26). Named **Jevaga** by Matt (he weighed "Jeviga" first; Jevaga makes the Galaga link obvious, so the art, name styling and wording must stay clearly original).
 - Nemotron is a live strategist, not a between-runs teacher (Matt picked this direction after learning between runs proved too noisy).
 - Real time for everyone, carried over: the game never waits for a decision.
 - Keyboard play, carried over.
