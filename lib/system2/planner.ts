@@ -25,8 +25,12 @@ How the game works:
 Reply with exactly one line:
 Plan: <one or two short sentences, 25 words or fewer>
 
-Write plans the pilot can act on in the next few seconds, in the game's words: column numbers, "diver", "bullet", left, right, stay, fire. Name the biggest threat and where to be. Only mention bullets and divers that the description shows; don't predict new ones. Example of the form (a different situation from yours):
-Plan: The diver in column 2 is coming for you; slide right to column 6 and fire from there.`;
+Your plan is strategy for the next few seconds, not step-by-step orders. The pilot dodges bullets on its own, four times a second, and your plan is a few seconds old by the time it matters. So:
+- Never tell it to stay, hold, wait or stop in a column. Never give it exact moves.
+- Tell it where to hang out (a range of columns), what to shoot first (a diver, a side of the formation), and what to keep away from.
+- Only mention bullets and divers the description shows; don't predict new ones.
+Use the game's words: column numbers, "diver", "formation", "left side", "right side". Example of the form (a different situation from yours):
+Plan: A diver is coming down the left; work columns 5 to 7 and shoot the diver when it's above you, then the right side of the formation.`;
 
 export async function writePlan(input: PlanInput): Promise<string> {
   const key = process.env.NEBIUS_API_KEY;

@@ -135,4 +135,6 @@ Unchanged: Jev at `POST https://ai-gateway.vercel.sh/typesafe/v1/systemone` (pai
 
 **Useful unknown, carried from the frog game:** how does a written plan change Jev's move? Answered for rules in the frog game (one rule moved "wait" from 0.19 to 0.93). For Jevaga, build step 1 checks the same thing for plans with `scripts/plan-test.ts`: in a frozen fight where a bullet reaches your column in 0.3 s with an enemy above, does "dodge first" make Jev move and "keep firing" make it fire?
 
+**Measured in slice 6 (real models, seed 5, 4 runs each):** step-by-step plans hurt (live ~925 vs fixed ~1,950); strategic plans help (live ~3,125, surviving 17–51 s, vs fixed ~1,150 at 8–14 s under the same Jev instructions). The planner therefore writes strategy only, and Jev's instructions carry the survival rule.
+
 **Open:** whether to rename the `GoFrogGo` folder and repo to `Jevaga`.

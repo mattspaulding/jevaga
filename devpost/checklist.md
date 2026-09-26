@@ -59,7 +59,7 @@ Build mode: fast (chosen 2026-09-25)
   Learner check: Watch Jev fly a few runs. Does it dodge, and does it look like it's deciding?
   Commit: `Jev flies Jevaga`
 
-- [ ] **6. Nemotron plans live and Jev follows**
+- [x] **6. Nemotron plans live and Jev follows**
   Becomes usable: During a Jev run the NEMOTRON window shows a new plan every ~3 s with its age; Jev's instructions change with it; runs repeat until Stop.
   Why now: This is the kernel. It needs Jev flying first.
   PRD ref: `prd.md > Nemotron plans (System 2)`, `prd.md > The Core Journey`
@@ -129,3 +129,4 @@ Activity mode:
 - Switched from the frog game to Jevaga, a Galaga-style shooter, with Nemotron as a live strategist instead of a between-runs teacher — Matt, 2026-09-26: Jev only ever waited or hopped forward, which wasn't interesting to watch, and learning between runs was too noisy (the same playbook scored 7 to 32). Slices 1–3 stay as history; slices 4–8 are rewritten for the shooter. Scope, PRD and spec rewritten and approved ("Jevaga, you derive the sprites, go build it").
 - Slice 4 also brought in the fight descriptions for Jev and the four-move/plan interface from slice 5, and retired the frog coach (lesson route, coach memory, lesson test, simulator) from slice 6: the old files no longer compiled against the shooter, and keeping the project building mattered more than slice boundaries. Slice 5 adds the plan test and a new simulator; slice 6 adds the live planner.
 - The plan test's third check measures how far a plan shifts Jev rather than requiring a plan to override survival — with "ignore bullets and keep firing", Jev's chance of firing under a bullet rose from 0.04 to 0.24 but it still dodged, because its fixed instructions put staying alive first. That's the behavior the game wants.
+- Nemotron's plans are strategy (which columns to work, what to shoot first, what to avoid), never step-by-step orders, and Jev's instructions state the survival rule outright — with step-by-step plans ("stay in column 4 and fire"), live planning halved Jev's score (~925 vs ~1,950 fixed) because the orders were stale within a second and Jev stopped dodging. With strategic plans, seed 5 over 4 runs each: fixed plan ~1,150 (8–14 s), live plans ~3,125 (17–51 s, two runs cleared wave 1).
