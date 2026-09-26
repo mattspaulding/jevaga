@@ -3,7 +3,7 @@
 Planning is done and approved (`devpost/scope.md`, `prd.md`, `spec.md`). Deadlines: Build With AI Basics closes **Oct 26, 5 PM ET**; Nebius x NVIDIA closes **Oct 30, 10 AM PT**, and the demo URL must stay live through judging (Dec 1 to 15).
 
 ## Waiting on
-- [ ] **Nebius promo code email.** The hackathon form was submitted 2026-09-25 with activation code `NEBIUS-DEVPOST-GLOBAL26`; Nebius emails the real promo code to strawberrydigitalllc@gmail.com, which `ACCOUNTS.md` notes is not read daily, so check it. When it arrives: Token Factory → Billing → Payments → Account balance **+** → With promo code → apply. Worth $25. (The activation code itself is rejected in billing.)
+- [x] **Nebius promo code.** Arrived 2026-09-26 in the strawberrydigitalllc@gmail.com inbox and applied the same day: Token Factory account balance $25.00, no expiry (the email says credits "won't expire" once applied; apply-by date was 2026-12-31).
 
 ## Before build step 1
 - [x] Create a Nebius Token Factory API key and save it to `.env.local` as `NEBIUS_API_KEY` (done 2026-09-25; Nemotron check passed: 364 ms, thinking off, clean two-line lesson).
