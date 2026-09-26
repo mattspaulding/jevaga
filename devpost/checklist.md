@@ -129,9 +129,19 @@ Build mode: fast (chosen 2026-09-25)
   Learner check: Start a run. Does the fly-in look and feel like Galaga's, and can you tell a Cyclops you've hit once?
   Commit: `Every wave flies in; the Cyclops takes two hits`
 
-- [ ] **13. Carriers, weapons and pickups**
+- [ ] **13. The fight has sound**
+  Becomes usable: retro sound effects made in code with the browser's Web Audio API: your shot, enemy pops by kind, the Cyclops's tink when its eye shuts, the ship's explosion, a Drone's rev, a Bat's commit chirp, the Cyclops's rising glow and zap, Bat bullets, a swoop for each fly-in group, a jingle at the start of each wave, a rewind when a death replays, and a chime or buzz for a kept or rejected rule. A SOUND button and the M key mute it, remembered in this browser.
+  Why now: Matt, 2026-09-26: "we should also consider adding a sound effects to the game." Before carriers, so the saved learning run and the video have it.
+  PRD ref: `prd.md > Sound`
+  Spec ref: `spec.md > Sound`
+  Build: `lib/game/cues.ts` (pure: turns frame-to-frame changes in the world into cues, no engine changes); `lib/game/sound.ts` (the synth voices and mute); hook the cues into `components/GameCanvas.tsx`, the verdict sounds into `components/Game.tsx`, the button into `components/Panel.tsx`.
+  Verify (mechanical): `pnpm world-check` passes with cue cases (a scripted fight yields one shot cue per shot fired, one pop per kill, a tink per first Cyclops hit, one boom at the hit, three swoops per fly-in, a rev per Drone dive, and nothing when the world is only swapped for a replay); every voice renders to a non-silent buffer through an OfflineAudioContext in the browser pane with no console errors; replays still retrace exactly.
+  Learner check: Play a wave with sound on. Do the sounds help you read the fight, and is anything annoying enough to change?
+  Commit: `Add sound effects`
+
+- [ ] **14. Carriers, weapons and pickups**
   Becomes usable: a carrier of each kind uses its weapon (Wingmen, Fan, Eye Beam); shooting it drops the weapon to your row; gliding onto it gives it to you until the wave ends; Jev reads carriers, pickups and the weapon it holds.
-  Why now: Needs the dives from slice 11 and the fly-in from slice 12; the beam needs `threatOnPath` to handle a hazard that lasts.
+  Why now: Needs the dives from slice 11 and the fly-in from slice 12, and gets sounds for its weapons from slice 13; the beam needs `threatOnPath` to handle a hazard that lasts.
   PRD ref: `prd.md > The fight`
   Spec ref: `spec.md > Enemies, carriers and waves`, `enemy-design.md` section 2 (weapons, carriers and pickups)
   Build: carrier selection, the three weapons both ways, pickup fall/wait/fade, player weapon state, sprites for icons and tokens (Matt's canvas or derived), describe lines.
@@ -139,7 +149,7 @@ Build mode: fast (chosen 2026-09-25)
   Learner check: Shoot a carrier, grab its weapon, and use it. Does it feel worth going for early?
   Commit: `Carriers drop weapons you can use`
 
-- [ ] **14. Waves escalate**
+- [ ] **15. Waves escalate**
   Becomes usable: waves 1 to 6 follow the table in `enemy-design.md` (kinds, divers at once, speed, carriers, escorts, mirrored Drone pairs, fly-in entry), and the swarm rule kicks in when few enemies are left.
   Why now: Needs every kind and weapon in place.
   PRD ref: `prd.md > The fight`
@@ -149,7 +159,7 @@ Build mode: fast (chosen 2026-09-25)
   Learner check: Play to wave 4. Does it get harder in ways you can read?
   Commit: `Waves escalate like Galaga`
 
-- [ ] **15. The Enemy Library**
+- [ ] **16. The Enemy Library**
   Becomes usable: a LIBRARY screen from the panel with a page per enemy (sprites, name, lore, attack, weapon, spot it coming, first seen).
   Why now: The content is settled in `enemy-design.md`; it's quick once the enemies behave as described.
   PRD ref: `prd.md > Enemy Library`
@@ -159,7 +169,7 @@ Build mode: fast (chosen 2026-09-25)
   Learner check: Open the library. Do the pages make you want to meet these enemies?
   Commit: `Add the Enemy Library`
 
-- [ ] **16. It fails honestly and can run offline**
+- [ ] **17. It fails honestly and can run offline**
   Becomes usable: Outage states verified end to end, including during replays; `SYSTEM1=fake` flies with the SIMULATED badge; README explains setup and how Jev and Nemotron are each used; `.env.example` complete.
   Why now: Makes the live URL safe to leave up through judging.
   PRD ref: `prd.md > States and Boundaries`
@@ -223,3 +233,5 @@ Activity mode:
 - A fly-in at the start of every wave and a two-hit Cyclops were added as slice 12, ahead of carriers (Matt, 2026-09-26: "they come in from the top and... formation on like an initial attack", and "stronger ones that took more than one hit"). The earlier plan had the formation already in place on wave 1, the fly-in only from wave 3 and on the cut list, and one-hit Cyclopes. Carriers, waves, the Enemy Library and honest failures move to slices 13 to 16.
 - Slice 12: the fly-in takes 7.9 s from wave start to the last enemy in its slot, and the fight starts 1 s later. Building it turned up a scoring bug from slice 11: an enemy was marked dead before its points were counted, so every diving kill paid formation points. Fixed; a diving Cyclops now pays 400.
 - Review of slices 11 and 12 (four finders, a skeptic per dimension): three real defects fixed. A Cyclops at an end slot could loop 0.7 columns off the field; its loop now swings to one side, away from the edge. A revving Drone's arrival time ignored the formation's drift during the rev (off by up to 0.2 s), and every "reaching your row" time now counts to when the enemy can hit, matching the "Drone in 0.6 s" numbers. Describing the fight cost 7 to 13 ms per ask during the fly-in; one ask now shares its three predictions and skips the simulation when nothing can reach the ship, which brings it to 0.1 ms in wave 1 and 3 ms in wave 2. Two findings were rejected: the Bat's edge guard is deliberate, and a charging Cyclops with a shut eye is meant to show both.
+- Sound effects added as slice 13, before carriers (Matt, 2026-09-26: "we should also consider adding a sound effects to the game"; on where it goes: "Whatever you think"). Synthesized in code, so there are no audio files and no paid generation, and the video can render the same sounds. Carriers, waves, the Enemy Library and honest failures move to slices 14 to 17.
+

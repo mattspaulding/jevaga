@@ -125,6 +125,12 @@ Unchanged: `pnpm dev`, open http://localhost:3000 (`?seed=N` optional), keys in 
 - Time and cost: a replay is about 10 questions, about 2.5 s and $0.0002. With 8 fixed deaths a test is about 90 questions, about 25 s and $0.002, and a retry doubles it. A coach call is 1 to 3 s and about $0.0005. The COACH window shows progress while it runs.
 - The judge tests survival and the control moments only. Score and kills are watched across runs in RUNS and in `scripts/learn.ts`, not used to accept a rule.
 
+### Sound
+`lib/game/cues.ts`, `lib/game/sound.ts`. PRD ref: `prd.md > Sound`.
+- **Cues, not engine events.** The engine stays untouched, so replays stay exact. Each animation frame, `createCueTracker().update(world, replaying)` compares the world with what it saw last frame (the reload time, new shots, bullets and pops by identity, each enemy's phase, charge and hurt time, the wave, whether the ship is alive) and returns the cues since then. A different world object (a new run or a replay) is taken in silently, apart from one "start" or "rewind" cue.
+- **Voices.** Each cue is a short synth voice built from Web Audio oscillators, a noise buffer, filters and gain envelopes, written against `BaseAudioContext` so an `OfflineAudioContext` can render the same sounds for the video. One master gain; at most 12 voices at once.
+- **Mute and unlock.** The AudioContext is created or resumed on the first click or key press (browsers require it). Muted state lives in localStorage (wrapped in try/catch) and defaults to on.
+
 ### Enemy Library
 `components/Library.tsx`, opened from the panel. PRD ref: `prd.md > Enemy Library`.
 - One page per enemy, from `enemy-design.md > The Enemy Library`: sprites (formation and dive pose, drawn from `lib/game/sprites.ts`), name, lore, how it attacks, its weapon, spot it coming, first seen.

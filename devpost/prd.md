@@ -85,6 +85,11 @@ Source: `enemy-design.md`, which has every number.
 - [ ] The replay plays on the playfield, tagged REPLAY, ending with SURVIVED or HIT.
 - [ ] Forget rules empties the rulebook and the saved deaths.
 
+### Sound
+- Retro arcade sound effects for the fight: your shots, enemy pops, the Cyclops's tink and zap, a Drone's rev, a Bat's commit, the ship's explosion, the fly-in swoops and a jingle for each wave, plus a rewind when a death replays and a chime or buzz for a rule kept or thrown out.
+- A SOUND button (and the M key) mutes it, remembered in this browser.
+- [ ] Every sound above plays at its moment, in both modes and during replays, and the mute sticks.
+
 ### Enemy Library
 - A LIBRARY screen has one page per enemy: its sprites, name, a little lore, how it attacks, its weapon, how to spot it coming, and the wave it first appears. The copy is in `enemy-design.md`.
 - [ ] Every enemy in the game has a library page, reachable from the panel.
