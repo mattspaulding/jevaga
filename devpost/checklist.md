@@ -79,20 +79,51 @@ Build mode: fast (chosen 2026-09-25)
   Learner check: Does it look like the design canvas, and do ship, enemies and bullets read at a glance?
   Commit: `Jevaga: 16-bit sprites and styled panel`
 
-- [ ] **8. It fails honestly and can run offline**
-  Becomes usable: Outage states verified end to end; `SYSTEM1=fake` flies with the SIMULATED badge; README explains setup and how Jev and Nemotron are each used; `.env.example` complete.
+- [ ] **8. A death can be replayed, and a written rule can change how it ends**
+  Becomes usable: `pnpm replay-test` rebuilds a real death from the flight recorder, shows it replays to the same hit with Jev's own answers, and shows a hand-written rule turning it into a survival (and the same death without the rule still dying). `pnpm world-check` proves a cloned world plays out identically.
+  Why now: The whole learning loop rests on two things nobody has checked yet: that a death can be rebuilt exactly, and that a rule can flip its outcome on replay. Like slice 1, it is a technical slice allowed because it proves the critical risk and leaves runnable evidence before any panel work.
+  PRD ref: `prd.md > Jev learns from its deaths (System 2)`
+  Spec ref: `spec.md > The fight` (randomness, hits), `spec.md > The flight recorder`, `spec.md > The replay`, `spec.md > Jev flies (System 1)`
+  Build: move the random state into `world.rngState`; `world.hitBy`; `DecideInput.rules` and `instructionsFor(rules)` (starting line only, no survival rule); `onAsk` hook in `driveWithJev`; `lib/learn/recorder.ts` (with control moments); `lib/learn/replay.ts` (`replay`, `playback`, the end-of-replay threat check, the shared 4-a-second limiter); `scripts/replay-test.ts` records a live headless Jev run until it dies, then replays it three ways; determinism checks in `world-check.ts`.
+  Verify (mechanical): `pnpm world-check` passes, including "a cloned world plays out the same with the same moves"; `pnpm replay-test` on seed 5 reports how many of 5 recorded deaths reproduce at the fixed latency, and for at least one reproduced death a hand-written rule makes the replay survive while the replay without it still dies; `tsc` and lint clean.
+  Learner check: Run `pnpm replay-test` and read one death: what Jev read before it, what it picked, and whether the rule changed the pick and the outcome.
+  Commit: `Record and replay Jev's deaths`
+
+- [ ] **9. Jev learns from its deaths**
+  Becomes usable: Press Start in Jev mode with an empty rulebook. After each death the COACH window shows Nemotron studying it, what happened and the rule it wrote; the rule is tested on the replay and on every earlier fixed death, and kept or thrown out; the RULEBOOK grows; RUNS shows the rules each run had; Forget rules starts over. `pnpm learn -- 5 12` does the same headless and prints the learning curve.
+  Why now: This is the kernel, and it needs slice 8's replay.
+  PRD ref: `prd.md > Jev learns from its deaths (System 2)`, `prd.md > The Core Journey`, `prd.md > States and Boundaries`
+  Spec ref: `spec.md > The coach (System 2)`, `spec.md > The judge`, `spec.md > Panel and playfield`, `spec.md > Data Model`
+  Build: `lib/system2/coach.ts`, `app/api/coach/route.ts`, `lib/learn/judge.ts`; the between-runs steps in `Game.tsx`; COACH window (with its tags), RULEBOOK window with the fresh-rule flash, RUNS rule count, Forget rules; `scripts/learn.ts`; retire `drivePlanner`, `lib/system2/planner.ts`, `app/api/plan`, `scripts/plan-test.ts` and the NEMOTRON plan window; `sim.ts` takes a rulebook file.
+  Verify (mechanical): `curl /api/coach` with a saved death returns the three lines; `pnpm learn -- 5 12` from an empty rulebook ends with at least 3 kept rules, every kept rule's replay survived, every fixed death still survives a replay with the final rulebook, and Jev still fires in the control moments; it prints score, kills and rule count per run (read, not gated: one run is mostly luck); in the browser pane the windows update through a few runs with no console errors; after Forget rules the RULEBOOK reads "Empty. Jev starts on reflexes alone." and the next death reports 0 earlier deaths tested; `pnpm build` passes.
+  Learner check: Start from an empty rulebook and watch five or six runs. Do the rules read like sensible lessons from the deaths you just saw, and does Jev last longer?
+  Commit: `Jev learns a rule from each death`
+
+- [ ] **10. The replay plays on the playfield**
+  Becomes usable: Between runs the playfield replays the last seconds before the death with the tested rules, tagged REPLAY, ending on "REPLAY · SURVIVED" or "REPLAY · HIT"; then the next run starts.
+  Why now: It is the moment the video needs, and it only makes sense once rules are being tested.
+  PRD ref: `prd.md > Jev learns from its deaths (System 2)`, `prd.md > Look and Feel`
+  Spec ref: `spec.md > The replay` (`playback`), `spec.md > Look and Feel`, `spec.md > Panel and playfield`
+  Build: `GameCanvas` draws a playback world when one is given; REPLAY who-tag and the SURVIVED/HIT banner; `Game.tsx` plays it after the judge and before the next run; Stop cancels it.
+  Verify (mechanical): in the browser pane a replay follows each death and ends with the banner that matches the judge's result; the playback's final ship position matches the tested replay's (logged); no console errors.
+  Learner check: Watch a death, then its replay. Can you see what the rule made Jev do differently?
+  Commit: `Show each death's replay on the playfield`
+
+- [ ] **11. It fails honestly and can run offline**
+  Becomes usable: Outage states verified end to end, including during replays; `SYSTEM1=fake` flies with the SIMULATED badge; README explains setup and how Jev and Nemotron are each used; `.env.example` complete.
   Why now: Makes the live URL safe to leave up through judging.
   PRD ref: `prd.md > States and Boundaries`
   Spec ref: `spec.md > Important Failure Modes`, `spec.md > Where It Runs and How Someone Tries It`
-  Build: fake adapted to four moves; README; `.env.example`.
-  Verify (mechanical): wrong gateway key → "Jev unavailable" and no start; wrong Nebius key → Jev flies on a stale plan; `SYSTEM1=fake` shows SIMULATED; restore keys, normal run.
+  Build: fake adapted to four moves and to the rulebook; README; `.env.example`.
+  Verify (mechanical): wrong gateway key → "Jev unavailable" and no start; Jev failing mid-replay → "couldn't test the rule" and the rule isn't kept; wrong Nebius key → no rule, rulebook unchanged, next run starts; `SYSTEM1=fake` shows SIMULATED; restore keys, normal run.
   Learner check: Set `SYSTEM1=fake`, restart, press Start, check SIMULATED is obvious; set it back.
   Commit: `Handle model failures and add offline mode`
 
 ## Hands-on Checkpoints
 
 - [x] Early usable behavior explored: after slice 3 (frog game). Matt's feedback led to real time, keyboard play, the continuous rebuild, the paid gateway tier, and finally the switch to Jevaga.
-- [ ] Jevaga early check: after slice 6, when Nemotron's plans steer Jev
+- [x] Jevaga early check: after slices 6 and 7. Matt tried both modes ("it seems to be working pretty well"), asked for continuous steering (rebuilt), and questioned what the live coach adds, which led to the learning-from-deaths redesign.
+- [ ] Learning check: after slice 9, when Jev learns rules from its deaths
 - [ ] Final kick-the-tires exploration and feedback completed
 
 ## Final Review
@@ -132,3 +163,4 @@ Activity mode:
 - Nemotron's plans are strategy (which columns to work, what to shoot first, what to avoid), never step-by-step orders, and Jev's instructions state the survival rule outright — with step-by-step plans ("stay in column 4 and fire"), live planning halved Jev's score (~925 vs ~1,950 fixed) because the orders were stale within a second and Jev stopped dodging. With strategic plans, seed 5 over 4 runs each: fixed plan ~1,150 (8–14 s), live plans ~3,125 (17–51 s, two runs cleared wave 1).
 - The ship now glides continuously instead of stepping between columns, after Matt said held keys still "snap to a grid". Jev's scores fell from about 3,100 to 900 until its moves matched their descriptions: each glide lasts a quarter-second, threats are checked along the path, divers stop turning 4 rows above the ship, and Nemotron's plans avoid the word "stay". Six live runs on seed 5 now average 4,500.
 - Slice 7 took its sprites from Matt's "Jevaga sprites" design canvas instead of deriving them. The canvas's Grids board is copied into `lib/game/sprites.ts` by script, and its In motion board sets the frame timings. The panel follows `design-handoff.md` with three changes. The green window and the green START/YOU PLAY fills are darker, so white and green text pass 4.5:1 contrast. Ligatures are off, because Pixelify Sans turned "fi" into a glyph that reads as "A". The mode switch uses pressed buttons instead of radios, so the arrow keys keep flying the ship.
+- Nemotron now learns from Jev's deaths instead of planning live, and Jev starts with no hand-written survival rule. Matt, 2026-09-27, after seeing that the live planner gave the same advice in the same situation and never learned: "we start off with just a dumb… Jev… the LLM then comes in, analyzes what went wrong in that fail state, writes an instruction to recognize that particular state." Rules are proven on a replay of the death and on every earlier fixed death, not judged by the next run's score, which the frog game showed is mostly luck. Scope, PRD and spec revised; slices 8 to 10 added for the recorder and replay, the learning loop, and the on-screen replay; the old slice 8 becomes slice 11.
