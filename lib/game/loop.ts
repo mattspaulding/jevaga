@@ -7,7 +7,9 @@ import { advance, clearFor, hop, MOVES, targetOf, type Move, type RunEvent, type
 // anyone can hop the frog at any moment (a key press, or Jev's answer landing).
 export const FRAME_MS = 16;
 export const RETRY_MS = 3000;
-export const DECISION_GAP_MS = 250; // at most ~4 questions a second, to stay under Jev's rate limit
+// Jev through the gateway sustains roughly 25-30 requests a minute; faster than
+// that and it answers "unavailable". One question a second at most (Matt's call).
+export const MIN_REQUEST_INTERVAL_MS = 1000;
 export const REQUEST_TIMEOUT_MS = 2500; // no answer by then counts as an outage, not slowness
 const KEEP_DECISIONS = 6;
 const SAFE_WINDOW_S = 0.6;
@@ -107,9 +109,13 @@ export async function driveWithJev(
   },
 ): Promise<BeatLog[]> {
   const log: BeatLog[] = [];
+  let lastSent = -Infinity;
   while (!run.ended()) {
+    await sleepUnless(lastSent + MIN_REQUEST_INTERVAL_MS - performance.now(), run.ended);
+    if (run.ended()) break;
     const snap = snapshot(run.world);
     const sent = performance.now();
+    lastSent = sent;
     let decision: Decision;
     try {
       decision = await getMove({ state: snap.state, moves: snap.moves, playbook: hooks.playbook }, AbortSignal.timeout(REQUEST_TIMEOUT_MS));
@@ -135,7 +141,6 @@ export async function driveWithJev(
     if (log.length > KEEP_DECISIONS) log.shift();
     run.hop(decision.move);
     hooks.onDecision({ ...decision, ms });
-    await sleepUnless(DECISION_GAP_MS - ms, run.ended);
   }
   return log;
 }
