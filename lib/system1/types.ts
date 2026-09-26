@@ -20,5 +20,5 @@ export type System1 = { decide(input: DecideInput): Promise<Decision> };
 export const STARTING_PLAN = "Dodge anything about to reach your column; otherwise line up under an enemy and fire.";
 
 export function instructionsFor(plan: string): string {
-  return `Pick the ship's next move in a space shooter. Staying alive comes first: never stay or fire in a column where a bullet or diver arrives within 0.6 s. Then follow your coach's plan to score.\nYour coach's plan: ${plan}`;
+  return `Pick the ship's next move in a space shooter. Staying alive comes first: never pick a move whose description shows a bullet or diver arriving within 0.6 s. Then follow your coach's plan to score.\nYour coach's plan: ${plan}`;
 }

@@ -4,18 +4,23 @@ import { describeMoves } from "../lib/describe";
 import {
   act,
   advance,
+  DECISION_SECONDS,
+  DIVE_LOCK_ROW,
   drift,
   enemyPos,
   fire,
   gunReadyIn,
   landingX,
+  movePath,
   newWorld,
   resetRun,
+  restX,
   SHIP_ROW,
   SHIP_SPEED,
   steer,
   targetAbove,
   threatAt,
+  threatOnPath,
   type World,
 } from "../lib/game/world";
 
@@ -57,6 +62,22 @@ function quiet(seed = 1): World {
   advance(w, 3);
   check("the ship stops at the right edge", w.ship.x === 8);
   check(`Jev's "left" lands about ${(SHIP_SPEED * 0.25).toFixed(2)} columns over`, near(landingX(w, "left"), 8 - SHIP_SPEED * 0.25));
+}
+
+// Jev's glides are one decision long, so its moves go where their descriptions say.
+{
+  const w = quiet();
+  act(w, "left");
+  advance(w, 0.6);
+  check(`Jev's "left" glides ${DECISION_SECONDS} s and stops (x 4 → ${w.ship.x.toFixed(2)})`, near(w.ship.x, 4 - SHIP_SPEED * DECISION_SECONDS, 0.03) && w.ship.vx === 0);
+  const v = quiet();
+  act(v, "right");
+  advance(v, 0.1);
+  check(`mid-glide, Jev is told where the ship stops (x ${v.ship.x.toFixed(2)} → ${restX(v).toFixed(2)})`, near(restX(v), 4 + SHIP_SPEED * DECISION_SECONDS, 0.03));
+  check("and its next move is measured from there", near(landingX(v, "right"), 4 + 2 * SHIP_SPEED * DECISION_SECONDS, 0.03));
+  act(v, "right");
+  advance(v, 0.1);
+  check("a second right before the first ends keeps gliding", v.ship.vx > 0);
 }
 
 // Shots, reload and kills.
@@ -107,6 +128,29 @@ function quiet(seed = 1): World {
   advance(w, 1.4);
   check("a diver steers toward the ship", d.diving !== null && d.diving.x > 3);
   check("a diver fires on its way down", w.bullets.length >= 1);
+}
+
+// Near the bottom a diver stops turning, so moving aside in time gets clear.
+{
+  const w = quiet();
+  const d = w.enemies[0];
+  d.diving = { x: 4, y: DIVE_LOCK_ROW + 0.1, fired: 2 };
+  w.ship.x = 6;
+  advance(w, 0.3);
+  check("a diver below the lock row falls straight", d.diving !== null && near(d.diving.x, 4, 1e-9));
+  const v = quiet();
+  v.enemies[0].diving = { x: 4, y: DIVE_LOCK_ROW + 0.1, fired: 2 };
+  check("threatAt: parked under it, it hits", threatAt(v, 4)?.by === "diver");
+  check("threatAt: 1.25 columns aside is clear", threatAt(v, 4 + SHIP_SPEED * DECISION_SECONDS) === null);
+}
+
+// A glide is judged by what it passes under, not only where it ends.
+{
+  const w = quiet();
+  w.bullets.push({ x: 4.6, y: 10.4 });
+  const to = landingX(w, "right");
+  check(`a bullet at x 4.6 misses a ship parked at x 4 or x ${to.toFixed(2)}`, threatAt(w, 4) === null && threatAt(w, to) === null);
+  check("but the glide between them runs into it", threatOnPath(w, movePath(w, "right"))?.by === "bullet");
 }
 
 // Prediction agrees with the simulation (ship parked).

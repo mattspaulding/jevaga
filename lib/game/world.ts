@@ -10,8 +10,8 @@ export const ROWS = 14;
 export const SHIP_ROW = 13;
 const SUBSTEP = 0.02;
 export const SHIP_SPEED = 5; // columns per second while steering
-// Jev's next decision comes about this long after its last one, so a "left"
-// or "right" from Jev means gliding that way for about this long.
+// Jev's next answer lands about this long after its last one, so a "left" or
+// "right" from Jev glides that way for this long and then stops.
 export const DECISION_SECONDS = 0.25;
 const SHIP_HALF = 0.45; // half the ship's width, in columns
 
@@ -19,6 +19,9 @@ const SHOT_SPEED = 12; // rows per second, upward
 const BULLET_SPEED = 7; // rows per second, downward
 const DIVE_SPEED = 3.5; // rows per second
 const DIVE_STEER = 2; // columns per second toward the ship
+// Below this row a diver stops turning and falls straight, about a second
+// before it reaches the ship, so there is always a moment to get out of its way.
+export const DIVE_LOCK_ROW = SHIP_ROW - 4;
 const RELOAD = 0.35; // seconds between shots
 const MAX_SHOTS = 3;
 const VOLLEY_EVERY = 1.2; // a formation enemy drops a bullet this often
@@ -37,7 +40,7 @@ export type World = {
   seed: number;
   rng: () => number;
   t: number;
-  ship: { x: number; vx: number; reloadUntil: number };
+  ship: { x: number; vx: number; glideUntil: number; reloadUntil: number };
   enemies: Enemy[];
   bullets: Bullet[];
   shots: Shot[];
@@ -72,7 +75,7 @@ export function newWorld(seed: number): World {
     seed,
     rng: makeRng(seed),
     t: 0,
-    ship: { x: 4, vx: 0, reloadUntil: 0 },
+    ship: { x: 4, vx: 0, glideUntil: 0, reloadUntil: 0 },
     enemies: formation(),
     bullets: [],
     shots: [],
@@ -98,9 +101,12 @@ function shipHit(world: World): boolean {
 }
 
 function step(world: World, dt: number): RunEvent {
+  const ship = world.ship;
+  const glide = Math.max(0, Math.min(dt, ship.glideUntil - world.t));
+  ship.x = clamp(ship.x + ship.vx * glide, 0, COLS - 1);
   world.t += dt;
   const t = world.t;
-  world.ship.x = clamp(world.ship.x + world.ship.vx * dt, 0, COLS - 1);
+  if (t >= ship.glideUntil) ship.vx = 0;
 
   for (const s of world.shots) s.y -= SHOT_SPEED * dt;
   world.shots = world.shots.filter((s) => s.y > -1);
@@ -110,8 +116,8 @@ function step(world: World, dt: number): RunEvent {
   for (const e of world.enemies) {
     const d = e.diving;
     if (!e.alive || !d) continue;
+    if (d.y < DIVE_LOCK_ROW) d.x += clamp(world.ship.x - d.x, -DIVE_STEER * dt, DIVE_STEER * dt);
     d.y += DIVE_SPEED * dt;
-    d.x += clamp(world.ship.x - d.x, -DIVE_STEER * dt, DIVE_STEER * dt);
     if (d.fired < DIVE_FIRE_ROWS.length && d.y >= DIVE_FIRE_ROWS[d.fired]) {
       world.bullets.push({ x: d.x, y: d.y + 0.5 });
       d.fired++;
@@ -178,10 +184,12 @@ export function advance(world: World, seconds: number): RunEvent {
   return null;
 }
 
-// Steering: -1 glides left, 1 glides right, 0 stops. The ship keeps gliding
-// until steered again.
-export function steer(world: World, dir: -1 | 0 | 1) {
-  if (world.alive) world.ship.vx = dir * SHIP_SPEED;
+// Steering: -1 glides left, 1 glides right, 0 stops. The ship glides for
+// `seconds` (the keyboard: until steered again) and then stops.
+export function steer(world: World, dir: -1 | 0 | 1, seconds = Infinity) {
+  if (!world.alive) return;
+  world.ship.vx = dir * SHIP_SPEED;
+  world.ship.glideUntil = dir === 0 ? world.t : world.t + seconds;
 }
 
 export function fire(world: World) {
@@ -190,11 +198,12 @@ export function fire(world: World) {
   world.ship.reloadUntil = world.t + RELOAD;
 }
 
-// Jev's four moves: left and right glide that way, stay stops, fire stops and shoots.
+// Jev's four moves: left and right glide that way for one decision's worth,
+// stay stops, fire stops and shoots.
 export function act(world: World, move: Move): RunEvent {
   if (!world.alive) return null;
-  if (move === "left") steer(world, -1);
-  if (move === "right") steer(world, 1);
+  if (move === "left") steer(world, -1, DECISION_SECONDS);
+  if (move === "right") steer(world, 1, DECISION_SECONDS);
   if (move === "stay") steer(world, 0);
   if (move === "fire") {
     steer(world, 0);
@@ -203,10 +212,18 @@ export function act(world: World, move: Move): RunEvent {
   return null;
 }
 
-// Where a move would leave the ship after about one decision's worth of gliding.
+// Where the ship stops if nobody steers it again. A glide still under way
+// finishes first (at most one decision's worth, about when Jev's answer lands).
+export function restX(world: World): number {
+  const { x, vx, glideUntil } = world.ship;
+  const left = Math.min(DECISION_SECONDS, Math.max(0, glideUntil - world.t));
+  return clamp(x + vx * left, 0, COLS - 1);
+}
+
+// Where a move answered now would leave the ship: from where it stops, one glide over.
 export function landingX(world: World, move: Move): number {
   const d = move === "left" ? -1 : move === "right" ? 1 : 0;
-  return clamp(world.ship.x + d * SHIP_SPEED * DECISION_SECONDS, 0, COLS - 1);
+  return clamp(restX(world) + d * SHIP_SPEED * DECISION_SECONDS, 0, COLS - 1);
 }
 
 export const gunReadyIn = (world: World) => Math.max(0, world.ship.reloadUntil - world.t);
@@ -215,16 +232,22 @@ export const gunReadyIn = (world: World) => Math.max(0, world.ship.reloadUntil -
 
 // When would a ship parked at `x` first be hit, from now? Follows the
 // bullets and divers already on screen (not ones that haven't launched yet).
-export function threatAt(world: World, x: number, horizon = 2.5): { at: number; by: "bullet" | "diver" } | null {
+export function threatAt(world: World, x: number, horizon = 2.5) {
+  return threatOnPath(world, () => x, horizon);
+}
+
+// The same for a ship that is moving: `path(s)` is where it is s seconds from now.
+export function threatOnPath(world: World, path: (s: number) => number, horizon = 2.5): { at: number; by: "bullet" | "diver" } | null {
   const bullets = world.bullets.map((b) => ({ ...b }));
   const divers = world.enemies.filter((e) => e.alive && e.diving).map((e) => ({ ...e.diving! }));
   for (let s = 0; s <= horizon; s += SUBSTEP) {
+    const x = path(s);
     if (bullets.some((b) => bulletHits(b, x))) return { at: s, by: "bullet" };
     if (divers.some((d) => diverHits(d, x))) return { at: s, by: "diver" };
     for (const b of bullets) b.y += BULLET_SPEED * SUBSTEP;
     for (const d of divers) {
+      if (d.y < DIVE_LOCK_ROW) d.x += clamp(x - d.x, -DIVE_STEER * SUBSTEP, DIVE_STEER * SUBSTEP);
       d.y += DIVE_SPEED * SUBSTEP;
-      d.x += clamp(x - d.x, -DIVE_STEER * SUBSTEP, DIVE_STEER * SUBSTEP);
       if (d.fired < DIVE_FIRE_ROWS.length && d.y >= DIVE_FIRE_ROWS[d.fired]) {
         bullets.push({ x: d.x, y: d.y + 0.5 });
         d.fired++;
@@ -232,6 +255,16 @@ export function threatAt(world: World, x: number, horizon = 2.5): { at: number; 
     }
   }
   return null;
+}
+
+// Where the ship goes if Jev answers `move` now: it finishes the glide under
+// way, the answer lands about a decision later, then it glides to landingX.
+export function movePath(world: World, move: Move): (s: number) => number {
+  const from = world.ship.x;
+  const rest = restX(world);
+  const to = landingX(world, move);
+  const toward = (a: number, b: number, d: number) => a + Math.sign(b - a) * Math.min(Math.abs(b - a), d);
+  return (s) => (s < DECISION_SECONDS ? toward(from, rest, SHIP_SPEED * s) : toward(rest, to, SHIP_SPEED * (s - DECISION_SECONDS)));
 }
 
 // The lowest enemy above `x` now, and how long a shot fired now takes to reach it.

@@ -6,9 +6,16 @@ import { system1 } from "../lib/system1";
 import { STARTING_PLAN } from "../lib/system1/types";
 import { writePlan } from "../lib/system2/planner";
 
-const seed = Number(process.argv[2] ?? 5);
-const runs = Number(process.argv[3] ?? 3);
-const live = process.argv[4] === "live";
+// pnpm passes the "--" through; skip it.
+const args = process.argv.slice(2).filter((a) => a !== "--");
+const seed = Number(args[0] ?? 5);
+const runs = Number(args[1] ?? 3);
+const live = args[2] === "live";
+
+// The browser gives up on an answer after REQUEST_TIMEOUT_MS and pauses the
+// fight; the sim does the same instead of flying blind while it waits.
+const withTimeout = <T>(p: Promise<T>, signal: AbortSignal) =>
+  Promise.race([p, new Promise<T>((_, reject) => signal.addEventListener("abort", () => reject(new Error("timeout"))))]);
 
 async function main() {
   const base = newWorld(seed);
@@ -22,7 +29,7 @@ async function main() {
     const recent: Move[] = [];
     const [end] = await Promise.all([
       run.done,
-      driveWithJev(run, (input) => system1().decide(input), {
+      driveWithJev(run, (input, signal) => withTimeout(system1().decide(input), signal), {
         plan: () => plan,
         onDecision: (d) => {
           counts[d.move]++;
