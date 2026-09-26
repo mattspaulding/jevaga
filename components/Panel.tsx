@@ -36,7 +36,7 @@ export function YouBox({ lastKey }: { lastKey: Move | null }) {
       <p className="pick">
         <strong>{lastKey ? `${ARROW[lastKey]} ${lastKey}` : "—"}</strong>
       </p>
-      <p className="muted">Same clock as Jev: one hop per beat. No key that beat means the frog waits.</p>
+      <p className="muted">The frog hops the instant you press. Cars keep moving either way.</p>
     </section>
   );
 }
@@ -76,7 +76,7 @@ export function Playbook({ rules }: { rules: string[] }) {
   );
 }
 
-export function DecisionBox({ decision, status, late }: { decision: Decision | null; status: Status; late: number }) {
+export function DecisionBox({ decision, status }: { decision: Decision | null; status: Status }) {
   return (
     <section className="box decision" aria-label="Jev decision">
       <h2>JEV · via Vercel AI Gateway</h2>
@@ -97,7 +97,9 @@ export function DecisionBox({ decision, status, late }: { decision: Decision | n
               </li>
             ))}
           </ul>
-          <p className="lateLine">{late > 0 ? `Too slow ${late}× this run → frog waited` : "\u00a0"}</p>
+          <p className="lateLine muted">
+            {decision.ms !== undefined ? `The road kept moving for ${decision.ms} ms while Jev thought.` : "\u00a0"}
+          </p>
         </>
       ) : (
         <>
@@ -110,7 +112,7 @@ export function DecisionBox({ decision, status, late }: { decision: Decision | n
                   ? "Jev didn't answer. Press Start to try again."
                   : "Press Start."}
           </p>
-          <p className="lateLine">{late > 0 ? `Too slow ${late}× this run → frog waited` : "\u00a0"}</p>
+          <p className="lateLine">{"\u00a0"}</p>
         </>
       )}
     </section>

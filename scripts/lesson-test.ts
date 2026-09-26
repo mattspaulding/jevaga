@@ -2,12 +2,13 @@
 // Uses the game's own world, describe and model code against real Jev and Nemotron.
 // Run: pnpm lesson-test   (reads keys from .env.local)
 import { describeMoves, describeState } from "../lib/describe";
-import { isHit, Lane, newWorld, World } from "../lib/game/world";
+import { clearFor, Lane, newWorld, World } from "../lib/game/world";
 import { jev } from "../lib/system1/jev";
 import type { Decision } from "../lib/system1/types";
 import { writeLesson } from "../lib/system2/nemotron";
 
-const LESSON = "If a car in lane +1 reaches your column this beat, wait.";
+const LESSON = "If lane +1 has a car at your column within 0.5 s, wait.";
+const ANSWER_LAG_S = 0.3; // Jev's answer lands about this long after the question
 const REPEATS = 3;
 
 // Frog on grass at column 4. Lane +1 is the only thing that matters.
@@ -15,16 +16,15 @@ function scenario(lane1: Lane): World {
   const w = newWorld(1);
   w.rows[0] = { kind: "grass" };
   w.rows[1] = lane1;
-  w.rows[2] = { kind: "road", dir: 1, speed: 1, cars: [{ head: 0, len: 1 }] }; // far from column 4
-  w.rows[3] = { kind: "grass" };
+  w.rows[2] = { kind: "grass" };
   w.frog = { row: 0, col: 4 };
-  w.beat = 0;
+  w.t = 0;
   return w;
 }
-// Speed-2 car at column 5 moving left sweeps 5, 4, 3 this beat: forward is fatal.
+// A fast car just right of column 4, moving left: it covers column 4 within about 0.1 s.
 const FATAL = scenario({ kind: "road", dir: -1, speed: 2, cars: [{ head: 5, len: 1 }] });
-// Speed-1 car at column 6 moving left reaches column 4 next beat: forward is safe.
-const CONTROL = scenario({ kind: "road", dir: -1, speed: 1, cars: [{ head: 6, len: 1 }] });
+// A slow car three columns away: column 4 stays clear for over a second.
+const CONTROL = scenario({ kind: "road", dir: -1, speed: 1, cars: [{ head: 7, len: 1 }] });
 
 let failures = 0;
 const check = (name: string, ok: boolean) => {
@@ -32,8 +32,8 @@ const check = (name: string, ok: boolean) => {
   if (!ok) failures++;
 };
 
-check("game rules agree: forward is fatal in the fatal case", isHit(FATAL.rows[1], 4, 0));
-check("game rules agree: forward is safe in the control case", !isHit(CONTROL.rows[1], 4, 0));
+check("game rules agree: hopping forward when Jev's answer lands is fatal in the fatal case", !clearFor(FATAL, 1, 4, ANSWER_LAG_S, 0.3));
+check("game rules agree: hopping forward then is safe in the control case", clearFor(CONTROL, 1, 4, ANSWER_LAG_S, 0.6));
 
 // Jev through the gateway has short outages; retry a few times before failing.
 async function withRetry<T>(fn: () => Promise<T>, tries = 5): Promise<T> {

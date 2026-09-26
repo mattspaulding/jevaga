@@ -2,17 +2,20 @@
 // Run: pnpm world-check
 import { describeMoves } from "../lib/describe";
 import {
+  advance,
+  beatSwept,
+  busyWindow,
+  carSpans,
   COLS,
-  carCells,
+  colsPerSecond,
   ensureRows,
-  isHit,
+  hop,
   Lane,
   newWorld,
+  occupied,
   resetRun,
   runIsCrossable,
-  STALL_BEATS,
-  step,
-  sweptCells,
+  STALL_SECONDS,
   targetOf,
 } from "../lib/game/world";
 
@@ -21,56 +24,67 @@ function check(name: string, ok: boolean) {
   console.log(`${ok ? "PASS" : "FAIL"}  ${name}`);
   if (!ok) failures++;
 }
-const same = (a: Iterable<number>, b: number[]) => JSON.stringify([...a].sort()) === JSON.stringify([...b].sort());
+const near = (a: number, b: number, eps = 0.05) => Math.abs(a - b) < eps;
 
-// Cars wrap around the 9 columns; `head` is the front cell.
-const wrapLane: Lane = { kind: "road", dir: 1, speed: 1, cars: [{ head: 8, len: 2 }] };
-check("length-2 car at column 8 moving right covers 8 and 7", same(carCells(wrapLane, 0)[0].cells, [8, 7]));
-check("one beat later it covers 0 and 8 (wrapped)", same(carCells(wrapLane, 1)[0].cells, [0, 8]));
+// Cars glide and wrap.
+const right: Lane = { kind: "road", dir: 1, speed: 1, cars: [{ head: 8, len: 2 }] };
+check("length-2 car with head 8 moving right starts at x = 7", near(carSpans(right, 0)[0].x, 7));
+check(`after 0.6 s it has moved one column and wrapped to x = 8`, near(carSpans(right, 0.6)[0].x, 8));
+check(`tier-1 speed is ${colsPerSecond(1).toFixed(2)} columns per second`, near(colsPerSecond(1), 1 / 0.6, 0.001));
+check("a car overlapping the wrap covers column 0 and column 8", occupied(right, 0, 0.9) && occupied(right, 8, 0.9));
 
-// Swept cells include every cell the body passes through.
-const fast: Lane = { kind: "road", dir: -1, speed: 2, cars: [{ head: 2, len: 1 }] };
-check("speed-2 car at column 2 moving left sweeps 2, 1, 0", same(sweptCells(fast, 0), [2, 1, 0]));
-check("frog moving into column 1 is hit (car passes through)", isHit(fast, 1, 0));
-check("frog moving into column 3 is safe (car is moving away)", !isHit(fast, 3, 0));
-const slow: Lane = { kind: "road", dir: 1, speed: 1, cars: [{ head: 3, len: 1 }] };
-check("frog can't hop onto a car (column 3)", isHit(slow, 3, 0));
-check("frog is hit where the car arrives (column 4)", isHit(slow, 4, 0));
-check("column 2, just behind the car, is safe", !isHit(slow, 2, 0));
+// Occupancy and timing windows.
+const left: Lane = { kind: "road", dir: -1, speed: 1, cars: [{ head: 6, len: 1 }] };
+check("car at column 6 occupies 6 now", occupied(left, 6, 0));
+check("column 4 is clear now", !occupied(left, 4, 0));
+const w4 = busyWindow(left, 4, 0);
+check(`column 4 gets a car in about 0.7 s, when it reaches the frog hitbox (got ${w4?.from.toFixed(2)})`, !!w4 && w4.from > 0.6 && w4.from < 0.8);
+check("column 4 is free again about 1.2 s later", !!w4 && w4.until - w4.from > 0.8 && w4.until - w4.from < 1.6);
 
-// Edges.
-check("left at column 0 is a wait", targetOf({ row: 3, col: 0 }, "left").col === 0);
-check(`right at column ${COLS - 1} is a wait`, targetOf({ row: 3, col: COLS - 1 }, "right").col === COLS - 1);
-check("back at row 0 is a wait", targetOf({ row: 0, col: 4 }, "back").row === 0);
-
-// Stall: waiting on grass ends the run after 15 beats.
+// Hops are instant; landing on a car is a hit; the clock hits whoever stands still.
 {
-  const w = newWorld(7);
-  let event = null;
-  let n = 0;
-  while (!event && n < 40) {
-    event = step(w, "wait").event;
-    n++;
-  }
-  check(`waiting on grass stalls after ${STALL_BEATS} beats`, event === "stalled" && n === STALL_BEATS);
+  const w = newWorld(5);
+  w.rows[1] = left;
+  w.frog = { row: 0, col: 6 };
+  check("hopping onto a car is a hit", hop(w, "forward") === "hit");
+}
+{
+  const w = newWorld(5);
+  w.rows[1] = left;
+  w.frog = { row: 0, col: 4 };
+  check("hopping into a clear square is safe", hop(w, "forward") === null);
+  check("standing there until the car arrives is a hit", advance(w, 2) === "hit" && w.t < 1.5);
 }
 
-// Determinism: same seed, same road; resetRun keeps the road.
+// Edges.
+check("left at column 0 stays put", targetOf({ row: 3, col: 0 }, "left").col === 0);
+check(`right at column ${COLS - 1} stays put`, targetOf({ row: 3, col: COLS - 1 }, "right").col === COLS - 1);
+check("back at row 0 stays put", targetOf({ row: 0, col: 4 }, "back").row === 0);
+
+// Stall: no forward progress for 9 seconds ends the run.
+{
+  const w = newWorld(7);
+  const e = advance(w, 20);
+  check(`standing on grass stalls after ${STALL_SECONDS} s`, e === "stalled" && near(w.t, STALL_SECONDS, 0.05));
+}
+
+// Determinism: same seed, same road; a new run keeps the road and resets the clock.
 {
   const a = newWorld(123);
   const b = newWorld(123);
   check("same seed gives the same road", JSON.stringify(a.rows) === JSON.stringify(b.rows));
+  a.t = 5;
   const r = resetRun(a);
-  check("a new run keeps the same road", r.rows === a.rows && r.frog.row === 0 && r.beat === 0);
+  check("a new run keeps the road and resets the clock", r.rows === a.rows && r.frog.row === 0 && r.t === 0);
 }
 
-// Describe never states a verdict, and "this beat" matches the collision rule.
+// Describe gives facts, never verdicts, and "car now" matches occupancy.
 {
   const w = newWorld(5);
-  w.rows[1] = fast;
-  w.frog = { row: 0, col: 1 };
+  w.rows[1] = left;
+  w.frog = { row: 0, col: 6 };
   const m = describeMoves(w);
-  check('forward into a sweep is described as "this beat"', /reaches column 1 this beat/.test(m.forward));
+  check('forward onto a car is described as "car now"', /Car now/.test(m.forward));
   check("move descriptions never say safe/unsafe", !Object.values(m).some((s) => /\b(safe|unsafe|danger|best)\b/i.test(s)));
 }
 
@@ -89,8 +103,9 @@ check("back at row 0 is a wait", targetOf({ row: 0, col: 4 }, "back").row === 0)
       if (lane.kind === "road") {
         lanes++;
         if (lane.cars.reduce((s, c) => s + c.len + lane.speed, 0) > 5) overBudget++;
-        const cells = lane.cars.flatMap((c, i) => carCells(lane, 0)[i].cells);
-        if (new Set(cells).size !== cells.length) overlaps++;
+        const cells = [...beatSwept({ ...lane, speed: 1, cars: lane.cars }, 0)].length;
+        const expected = lane.cars.reduce((s, c) => s + c.len + 1, 0);
+        if (cells > expected) overlaps++;
         run.push(lane);
       } else if (run.length) {
         if (run.length > 3) longRuns++;

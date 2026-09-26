@@ -60,6 +60,7 @@ From `prd.md > Look and Feel`.
 ## Components
 
 ### Game world
+**Rebuilt during `5-build` as a continuous world** (Matt: key presses felt slow and the cars should glide, not step). Time is in seconds; each car has a real position that moves every frame at 1.7 or 3.3 columns per second and wraps; the frog hops instantly and is hit whenever a car overlaps its square (hitbox inset 0.15 of a square each side). A physics timer advances the world in 20 ms steps; the canvas draws every animation frame. Stall = no forward progress for 9 s. Road generation and the solvability check still reason in 0.6 s beats, a conservative stand-in: a road crossable hopping only on beats is crossable hopping any time. The notes below describe the original beat model where they differ.
 `lib/game/world.ts`, `lib/game/rng.ts`. PRD ref: `prd.md > Endless road`.
 - **Grid:** 9 columns. Rows are numbered from 0 (the starting grass) upward.
 - **Generation:** each row comes from `rng(seed, rowIndex)`, so it depends only on the seed and its index. Grass strips are 1–2 rows; road runs are 1–3 lanes. Each road lane has a direction (−1 or +1), a speed (1 or 2 columns per beat), and 1–3 cars of length 1 or 2, with **sum of (length + speed) over the lane's cars ≤ 5**, so at least 4 cells are clear each beat. Rows are kept generated up to `frog.row + 3 + screen height`.
@@ -70,7 +71,9 @@ From `prd.md > Look and Feel`.
 - **Distance** is the furthest row reached this run. Going back doesn't reduce it.
 
 ### Beat loop
-**Revised during `5-build` to real time.** `playRun(world, controller, hooks)` ticks every `BEAT_MS` (600 ms). Right after each tick it describes the board and calls `controller.prepare()`; at the next tick it calls `controller.take()`. `jevController` sends the question at prepare time and uses Jev's answer only if it arrived before the tick; a late answer is thrown away and the frog waits (the panel counts "too slow"). An error returns "pause": the clock holds, the chip shows, and the question is re-sent every 3 s. `keyboardController` returns the last key pressed during the beat, or wait. The notes below describe the original turn-based loop.
+**Superseded by the continuous rebuild:** `startRun` runs the physics timer and exposes `hop()`; keys call it directly. `driveWithJev` asks Jev about the board as it is, hops the moment the answer lands (the board has moved on by then), and asks again, at most about 4 times a second. No answer within 2.5 s, or an error, pauses the world and retries every 3 s. The panel shows how long the road kept moving while Jev thought.
+
+*Earlier revision:* **Revised during `5-build` to real time.** `playRun(world, controller, hooks)` ticks every `BEAT_MS` (600 ms). Right after each tick it describes the board and calls `controller.prepare()`; at the next tick it calls `controller.take()`. `jevController` sends the question at prepare time and uses Jev's answer only if it arrived before the tick; a late answer is thrown away and the frog waits (the panel counts "too slow"). An error returns "pause": the clock holds, the chip shows, and the question is re-sent every 3 s. `keyboardController` returns the last key pressed during the beat, or wait. The notes below describe the original turn-based loop.
 `lib/game/loop.ts`. PRD ref: `prd.md > The Core Journey`.
 - `await getMove()` → `step()` → render → wait until at least 500 ms have passed since the last beat → repeat. The minimum keeps the video watchable and keeps calls under Jev's rate limit (raised from 350 ms at the slice 3 checkpoint). One move request in flight at a time.
 - **Jev outages** (added in build): the first move gets three tries a second apart; after that a failure means "Jev unavailable" and the game doesn't start. Mid-run failures pause the loop, show "Jev unavailable, retrying…", and retry every 3 seconds until Jev answers or Stop.
@@ -79,7 +82,8 @@ From `prd.md > Look and Feel`.
 
 ### Describing the road to Jev
 `lib/describe.ts`. PRD ref: `prd.md > Fast decisions (System 1)`.
-- **Time, not distance.** Every car fact is phrased as when it covers a given column: "reaches column 4 this beat", "reaches column 4 in 2 beats", "is moving away". "This beat" means moving there now gets you hit. Time is measured along the car's direction of travel, with wrap-around taken into account, so it's unambiguous.
+- **Seconds (continuous rebuild).** Facts read "car now, gone at 0.3 s", "car from 0.4 to 0.9 s" or "clear for 3+ s", measured from the moment Jev is asked.
+- *Beat model, superseded:* **Time, not distance.** Every car fact is phrased as when it covers a given column: "reaches column 4 this beat", "reaches column 4 in 2 beats", "is moving away". "This beat" means moving there now gets you hit. Time is measured along the car's direction of travel, with wrap-around taken into account, so it's unambiguous.
 - `describeState(world)` returns prose, not JSON, covering **every lane on screen** (Matt's call at the slice 3 checkpoint: "give it the whole visible board"): lane 0 first, then every lane ahead to the top of the screen, then the lanes behind. Each road lane gives its direction and speed, where every car is, and when a car reaches the frog's column and the columns either side of it. At row 0 the lane behind is "the edge; you can't go back". About 1,100 characters a beat.
 - `describeMoves(world)` returns five neutral move descriptions giving facts about the destination cell, never a verdict:
   - `forward`: "Step into lane +1, column 4. A car there reaches column 4 this beat."

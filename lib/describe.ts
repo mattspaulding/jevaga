@@ -1,58 +1,53 @@
-import { beatsUntilHit, carCells, COLS, Lane, Move, targetOf, visibleRows, World } from "./game/world";
+import { busyWindow, carSpans, colsPerSecond, COLS, Lane, Move, targetOf, visibleRows, World } from "./game/world";
 
-// Turns the world into the plain sentences Jev reads. Car facts are phrased as
-// time ("reaches column 4 this beat" = moving there now gets you hit), and the
-// same words are given to Nemotron so its lessons line up with what Jev sees.
+// Turns the world into the plain sentences Jev reads, at the moment the
+// question is asked. Car facts are in seconds for a given column:
+//   "car now, gone at 0.3 s"  = a car is there now; moving there now gets you hit
+//   "car from 0.4 to 0.9 s"   = safe for 0.4 s, then a car passes
+//   "clear for 3+ s"          = nothing coming
+// The same words are given to Nemotron so its lessons line up with what Jev sees.
 
-const HORIZON = 4;
+const HORIZON = 3;
+const s1 = (x: number) => `${x.toFixed(1)} s`;
+
+export function timing(lane: Lane, col: number, t: number): string {
+  const w = busyWindow(lane, col, t, HORIZON);
+  if (!w) return `clear for ${HORIZON}+ s`;
+  if (w.from < 0.05) return `car now, gone at ${s1(w.until)}`;
+  return `car from ${w.from.toFixed(1)} to ${s1(w.until)}`;
+}
 
 function laneLabel(offset: number) {
-  return offset === 0 ? "your lane (lane 0)" : `lane ${offset > 0 ? "+" : "-"}${Math.abs(offset)}`;
+  return offset === 0 ? "Lane 0, your lane," : `Lane ${offset > 0 ? "+" : "-"}${Math.abs(offset)}`;
 }
 
-function traffic(lane: Lane) {
-  if (lane.kind !== "road") return "grass";
-  const way = lane.dir < 0 ? "left" : "right";
-  return `road, cars move ${way} ${lane.speed} column${lane.speed > 1 ? "s" : ""} per beat`;
+function traffic(lane: Extract<Lane, { kind: "road" }>) {
+  return `road, cars move ${lane.dir < 0 ? "left" : "right"} ${colsPerSecond(lane.speed).toFixed(1)} columns per second`;
 }
 
-// "a car reaches column 4 this beat" / "in 3 beats" / "no car reaches column 4 for at least 4 beats"
-export function timing(lane: Lane, col: number, beat: number): string {
-  if (lane.kind !== "road") return `no cars on grass`;
-  const n = beatsUntilHit(lane, col, beat, HORIZON);
-  if (n === null) return `no car reaches column ${col} for at least ${HORIZON} beats`;
-  if (n === 1) return `a car reaches column ${col} this beat`;
-  return `a car reaches column ${col} in ${n} beats`;
+function carSpots(lane: Lane, t: number) {
+  const spots = carSpans(lane, t).map(({ x, len }) => {
+    const a = Math.floor(x);
+    const b = Math.floor(x + len - 0.001) % COLS;
+    return a === b ? `column ${a}` : `columns ${a}-${b}`;
+  });
+  return spots.length ? `${spots.length > 1 ? "cars at" : "a car at"} ${spots.join(" and ")}` : "no cars";
 }
 
-function carSpots(lane: Lane, beat: number) {
-  const spots = carCells(lane, beat).map(({ cells }) =>
-    cells.length > 1 ? `columns ${[...cells].sort((a, b) => a - b).join("-")}` : `column ${cells[0]}`,
-  );
-  return spots.length ? `${spots.length > 1 ? "cars" : "a car"} at ${spots.join(" and ")}` : "no cars";
-}
-
-// Short timing for one column: "this beat", "in 3 beats", "not for at least 4 beats".
-function when(lane: Lane, col: number, beat: number): string {
-  const n = beatsUntilHit(lane, col, beat, HORIZON);
-  if (n === null) return `not for at least ${HORIZON} beats`;
-  return n === 1 ? "this beat" : `in ${n} beats`;
-}
-
-// Every lane on screen. Road lanes list where the cars are and when a car
-// reaches your column and the columns either side of it.
+// Every lane on screen. Road lanes say where the cars are and when a car
+// covers your column and the columns either side of it.
 export function describeState(world: World): string {
   const { row, col } = world.frog;
   const { bottom, top } = visibleRows(row);
   const cols = [col - 1, col, col + 1].filter((c) => c >= 0 && c < COLS);
   const laneLine = (offset: number) => {
     const lane = world.rows[row + offset];
-    const name = offset === 0 ? "Lane 0, your lane," : cap(laneLabel(offset));
+    const name = laneLabel(offset);
     if (lane.kind === "grass") return `${name.replace(/,$/, "")}: grass.`;
-    const times = cols.map((c) => `column ${c} ${when(lane, c, world.beat)}`).join(", ");
-    return `${name} (${traffic(lane)}): ${carSpots(lane, world.beat)}. A car reaches ${times}.`;
+    const times = cols.map((c) => `Column ${c}: ${timing(lane, c, world.t)}`).join("; ");
+    return `${name} (${traffic(lane)}): ${carSpots(lane, world.t)}. ${times}.`;
   };
-  const lines = [`You are in lane 0, column ${col}. Columns run 0 to ${COLS - 1}.`, laneLine(0)];
+  const lines = [`You are in lane 0, column ${col}. Columns run 0 to ${COLS - 1}. Times are from now.`, laneLine(0)];
   lines.push("Ahead:");
   for (let r = row + 1; r <= top; r++) if (world.rows[r]) lines.push(laneLine(r - row));
   if (row === 0) lines.push(`Behind you: the edge; you can't go back.`);
@@ -63,31 +58,22 @@ export function describeState(world: World): string {
   return lines.join("\n");
 }
 
-const cap = (s: string) => s[0].toUpperCase() + s.slice(1);
-
-// Five neutral move descriptions: facts about the destination cell, never a verdict.
+// Five neutral move descriptions: facts about the square each move lands on, never a verdict.
 export function describeMoves(world: World): Record<Move, string> {
   const { row, col } = world.frog;
   const cell = (r: number, c: number) => {
     const lane = world.rows[r];
-    return lane.kind === "grass" ? "No cars on grass." : `${cap(timing(lane, c, world.beat))}.`;
+    return lane.kind === "grass" ? "Grass, no cars." : `${cap(timing(lane, c, world.t))}.`;
   };
-  const at = (m: Move) => targetOf(world.frog, m);
-  const moves = {} as Record<Move, string>;
-
-  const f = at("forward");
-  moves.forward = `Step into lane +1, column ${f.col}. ${cell(f.row, f.col)}`;
-
-  moves.wait = `Stay in lane 0, column ${col}. ${cell(row, col)}`;
-
-  moves.left =
-    col === 0 ? `Can't move left: the edge. Counts as waiting. ${cell(row, col)}` : `Stay in lane 0, move to column ${col - 1}. ${cell(row, col - 1)}`;
-  moves.right =
-    col === COLS - 1
-      ? `Can't move right: the edge. Counts as waiting. ${cell(row, col)}`
-      : `Stay in lane 0, move to column ${col + 1}. ${cell(row, col + 1)}`;
-
-  moves.back =
-    row === 0 ? `Not possible: the edge. Counts as waiting. ${cell(row, col)}` : `Step back into lane -1, column ${col}. ${cell(row - 1, col)}`;
-  return moves;
+  const f = targetOf(world.frog, "forward");
+  return {
+    forward: `Hop into lane +1, column ${f.col}. ${cell(f.row, f.col)}`,
+    wait: `Stay in lane 0, column ${col}. ${cell(row, col)}`,
+    left: col === 0 ? `Can't move left: the edge. Same as staying. ${cell(row, col)}` : `Hop left to column ${col - 1}. ${cell(row, col - 1)}`,
+    right:
+      col === COLS - 1 ? `Can't move right: the edge. Same as staying. ${cell(row, col)}` : `Hop right to column ${col + 1}. ${cell(row, col + 1)}`,
+    back: row === 0 ? `Not possible: the edge. Same as staying. ${cell(row, col)}` : `Hop back into lane -1, column ${col}. ${cell(row - 1, col)}`,
+  };
 }
+
+const cap = (s: string) => s[0].toUpperCase() + s.slice(1);

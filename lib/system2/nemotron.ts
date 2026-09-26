@@ -5,7 +5,7 @@ import type { Move } from "../game/world";
 const URL = "https://api.tokenfactory.nebius.com/v1/chat/completions";
 
 // moveText is the description of the chosen move, so the coach sees exactly where the frog went.
-// options: all five move descriptions; safe: moves that would have survived that beat (hindsight from the game).
+// options: all five move descriptions; safe: moves that would have kept the frog clear for the next ~1.2 s (hindsight from the game).
 export type BeatLog = {
   state: string;
   move: Move;
@@ -17,24 +17,24 @@ export type BeatLog = {
 export type Lesson = { whatHappened: string; rule: string };
 export class LessonError extends Error {}
 
-const SYSTEM = `You coach a frog in a grid road-crossing game. A fast model picks every move by following a numbered playbook. You add one rule after each run.
+const SYSTEM = `You coach a frog in a real-time road-crossing game. A fast model decides every hop by following a numbered playbook. You add one rule after each run.
 
 How the game works:
-- The world moves in beats. Each beat the frog makes one move (forward, left, right, back, wait), then every car advances.
-- The frog is hit if a car covers or passes through the frog's cell during that beat.
+- Cars glide along their lanes without stopping. The frog hops instantly from square to square whenever the fast model answers; the road keeps moving while it thinks (usually 0.2 to 0.6 s).
+- The frog is hit whenever a car overlaps its square.
 - "Lane 0" is the frog's lane. "Lane +1" is the next lane ahead, "lane +2" the one after, and so on to the top of the screen; "lane -1" is behind. Columns are 0 to 8.
-- The fast model sees every lane on screen: where the cars are, and when a car reaches the frog's column and the columns either side of it.
-- Timing words: a car "reaches column N this beat" means being in column N now gets the frog hit. "In N beats" means it arrives later. "For at least 4 beats" means clear for now.
-- A run also ends if the frog makes no forward progress for 15 beats (cause "stalled").
+- The fast model sees every lane on screen: where the cars are, and for its column and the columns either side, when the next car covers that column.
+- Timing words, in seconds from the moment the model was asked: "car now, gone at 0.3 s" means a car is there now, so hopping there now gets the frog hit. "Car from 0.4 to 0.9 s" means the square is safe for 0.4 s, then a car passes. "Clear for 3+ s" means nothing is coming.
+- A run also ends if the frog makes no forward progress for 9 seconds (cause "stalled").
 
 Reply with exactly two lines and nothing else:
 What happened: <one plain sentence about what went wrong>
 Rule: <one rule of 20 words or fewer>
 
-Write the rule as "If <situation>, <move>." using the game's own words: lane names ("lane 0", "lane +1", "lane -1"), timing ("reaches your column this beat", "in 2 beats", "for at least 4 beats") and moves ("forward", "wait", "left", "right", "back").
-The last beat's "Move chosen" line says exactly where the frog went and what was coming, and the list of all five options shows which moves were open. A car that "reaches column N this beat" hits a frog standing in or moving into column N, so waiting there is never safe. Pick the move that would have kept the frog alive and base the rule on it. Examples of the form:
-Rule: If a car in lane +1 reaches your column this beat, wait.
-Rule: If a car in your lane reaches your column in 2 beats, go forward.
+Write the rule as "If <situation>, <move>." using the game's own words: lane names ("lane 0", "lane +1", "lane -1"), timing ("car now", "car within 0.5 s", "clear for 1 s or more") and moves ("forward", "wait", "left", "right", "back"). Remember the model's answer lands a few tenths of a second after it is asked, so a car arriving within about 0.5 s is already dangerous.
+Each decision's "Move chosen" line says exactly where the frog went and what was coming, and the list of all five options shows which moves were open. Pick the move that would have kept the frog alive and base the rule on it. Examples of the form:
+Rule: If lane +1 has a car at your column within 0.5 s, wait.
+Rule: If your lane has a car at your column within 0.5 s and lane +1 is clear for 1 s, go forward.
 Do not repeat or reword a rule already in the playbook; write a rule about a different detail of what went wrong.`;
 
 const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9+-]+/g, " ").trim();
@@ -44,7 +44,7 @@ const action = (s: string) => norm(s).match(/\b(forward|wait|left|right|back)\b(
 function signature(rule: string) {
   const t = norm(rule).replace(/\byour lane\b/g, "lane 0");
   const lanes = [...new Set(t.match(/lane [+-]?\d/g) ?? [])].sort().join(",");
-  const timing = [...new Set(t.match(/this beat|in \d beats?|at least \d beats?|clear/g) ?? [])].sort().join(",");
+  const timing = [...new Set(t.match(/car now|within \d+(\.\d+)? s|\d+(\.\d+)? s or more|clear|\d+(\.\d+)? s/g) ?? [])].sort().join(",");
   return `${lanes}|${timing}|${action(rule)}`;
 }
 // The beat where the frog could still have been saved: the last beat, or if
@@ -78,10 +78,10 @@ export async function writeLesson(input: {
   const mistake = mistakeBeat(input);
   const problem = (l: Lesson) => {
     if (isRepeat(l.rule, input.playbook))
-      return `Your rule "${l.rule}" is already in the playbook. Look again at beat ${mistake ? mistake.index + 1 : input.beats.length} and write a different rule.`;
+      return `Your rule "${l.rule}" is already in the playbook. Look again at decision ${mistake ? mistake.index + 1 : input.beats.length} and write a different rule.`;
     const move = action(l.rule) as Move | undefined;
     if (mistake && (!move || !mistake.safe.includes(move)))
-      return `Your rule "${l.rule}" would not have saved the frog: at beat ${mistake.index + 1} only ${mistake.safe.join(", ")} kept it alive. Write a rule whose move is one of those.`;
+      return `Your rule "${l.rule}" would not have saved the frog: at decision ${mistake.index + 1} only ${mistake.safe.join(", ")} kept it alive. Write a rule whose move is one of those.`;
     return null;
   };
   let lesson = await ask(input);
@@ -106,19 +106,19 @@ async function ask(
   const user = [
     "Playbook:",
     ...input.playbook.map((r, i) => `${i + 1}. ${r}`),
-    `Cause: ${input.cause === "hit" ? "hit by a car on the last move" : "stalled: no forward progress for 15 beats"}`,
-    "Last beats (oldest first):",
+    `Cause: ${input.cause === "hit" ? "hit by a car" : "stalled: no forward progress for 9 seconds"}`,
+    "Last decisions (oldest first):",
     ...input.beats.map(
-      (b, i) => `Beat ${i + 1}.\n${b.state}\nMove chosen: ${b.move}: ${b.moveText} (confidence ${b.confidence.toFixed(2)})`,
+      (b, i) => `Decision ${i + 1}.\n${b.state}\nMove chosen: ${b.move}: ${b.moveText} (confidence ${b.confidence.toFixed(2)})`,
     ),
     ...(last?.options
-      ? ["All five options at the last beat were:", ...Object.entries(last.options).map(([m, t]) => `- ${m}: ${t}`)]
+      ? ["All five options at the last decision were:", ...Object.entries(last.options).map(([m, t]) => `- ${m}: ${t}`)]
       : []),
     ...(mistake
       ? [
           mistake.index === input.beats.length - 1
-            ? `Hindsight from the replay: at the last beat these moves would have kept the frog alive: ${mistake.safe.join(", ")}. Your rule's move must be one of them.`
-            : `Hindsight from the replay: by the last beat no move could save the frog. The mistake was beat ${mistake.index + 1} (move chosen: ${input.beats[mistake.index].move}: ${input.beats[mistake.index].moveText}). There, these moves would have kept it alive: ${mistake.safe.join(", ")}. Write the rule about beat ${mistake.index + 1}; its move must be one of those.`,
+            ? `Hindsight from the replay: at the last decision these moves would have kept the frog alive: ${mistake.safe.join(", ")}. Your rule's move must be one of them.`
+            : `Hindsight from the replay: by the last decision no move could save the frog. The mistake was decision ${mistake.index + 1} (move chosen: ${input.beats[mistake.index].move}: ${input.beats[mistake.index].moveText}). There, these moves would have kept it alive: ${mistake.safe.join(", ")}. Write the rule about decision ${mistake.index + 1}; its move must be one of those.`,
         ]
       : []),
     ...(retryNote ? [retryNote] : []),

@@ -1,166 +1,141 @@
 import { describeMoves, describeState } from "../describe";
 import type { DecideInput, Decision } from "../system1/types";
 import type { BeatLog } from "../system2/nemotron";
-import { isHit, MOVES, step, targetOf, type Move, type World } from "./world";
+import { advance, clearFor, hop, MOVES, targetOf, type Move, type RunEvent, type World } from "./world";
 
-// One clock for everyone: every BEAT_MS the frog makes the move chosen for
-// that beat and every car advances. Whoever is playing has until the next
-// tick to decide; no decision in time means the frog waits.
-export const BEAT_MS = 600;
+// A run in continuous time. A physics timer advances the world every frame;
+// anyone can hop the frog at any moment (a key press, or Jev's answer landing).
+export const FRAME_MS = 16;
 export const RETRY_MS = 3000;
-const KEEP_BEATS = 6;
+export const DECISION_GAP_MS = 250; // at most ~4 questions a second, to stay under Jev's rate limit
+export const REQUEST_TIMEOUT_MS = 2500; // no answer by then counts as an outage, not slowness
+const KEEP_DECISIONS = 6;
+const SAFE_WINDOW_S = 0.6;
 
 export type RunEnd = { cause: "hit" | "stalled"; distance: number };
-export type Choice = { move: Move; decision: Decision | null; late: boolean };
 
-export interface Controller {
-  // Called right after each tick with the situation for the coming beat.
-  prepare(input: DecideInput): void;
-  // Called at the tick. "pause" means the player can't play right now (a Jev outage).
-  take(): Choice | "pause";
-}
-
-export type RunHooks = {
-  playbook: string[];
-  onBeat: (world: World, choice: Choice) => void;
-  onPause?: () => void;
-  onResume?: () => void;
-  stopped: () => boolean;
-  beatMs?: number;
+export type Run = {
+  world: World;
+  hop(move: Move): void;
+  pause(): void;
+  resume(): void;
+  stop(): void;
+  ended(): boolean;
+  done: Promise<RunEnd | null>;
 };
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, Math.max(0, ms)));
-// Sleeps in short slices so Stop takes effect within ~100 ms.
-async function sleepUnlessStopped(ms: number, stopped: () => boolean) {
+async function sleepUnless(ms: number, cancelled: () => boolean) {
   const until = Date.now() + ms;
-  while (!stopped() && Date.now() < until) await sleep(Math.min(100, until - Date.now()));
+  while (!cancelled() && Date.now() < until) await sleep(Math.min(100, until - Date.now()));
 }
 
-// The situation at the start of a beat, plus hindsight for the coach: moves
-// that survive this beat and leave at least one move that survives the next.
-function snapshot(world: World) {
-  const state = describeState(world);
-  const moves = describeMoves(world);
-  const survives = (from: { row: number; col: number }, m: Move, beat: number) => {
-    const to = targetOf(from, m);
-    return isHit(world.rows[to.row], to.col, beat) ? null : to;
-  };
-  const safe = MOVES.filter((m) => {
-    const to = survives(world.frog, m, world.beat);
-    return to !== null && MOVES.some((n) => survives(to, n, world.beat + 1) !== null);
-  });
-  return { state, moves, safe };
-}
-
-// Plays one run in real time. Resolves when the frog is hit, stalls, or the
-// viewer presses Stop (end = null). Keeps the last 6 beats for the coach.
-export async function playRun(
-  world: World,
-  controller: Controller,
-  hooks: RunHooks,
-): Promise<{ end: RunEnd | null; beats: BeatLog[] }> {
-  const beatMs = hooks.beatMs ?? BEAT_MS;
-  const beats: BeatLog[] = [];
-  let snap = snapshot(world);
-  controller.prepare({ state: snap.state, moves: snap.moves, playbook: hooks.playbook });
-  let next = Date.now() + beatMs;
+export function startRun(world: World, onChange: (world: World) => void = () => {}): Run {
   let paused = false;
+  let finished = false;
+  let last = performance.now();
+  let resolve!: (end: RunEnd | null) => void;
+  const done = new Promise<RunEnd | null>((r) => (resolve = r));
 
-  while (world.alive && !hooks.stopped()) {
-    await sleepUnlessStopped(next - Date.now(), hooks.stopped);
-    if (hooks.stopped()) break;
+  const finish = (event: RunEvent | "stop") => {
+    if (finished) return;
+    finished = true;
+    clearInterval(timer);
+    resolve(event === "stop" || event === null ? null : { cause: event, distance: world.furthest });
+  };
 
-    const choice = controller.take();
-    if (choice === "pause") {
-      // The world holds still during an outage: ask again, then give a full beat.
-      if (!paused) hooks.onPause?.();
+  const timer = setInterval(() => {
+    const now = performance.now();
+    const dt = (now - last) / 1000;
+    last = now;
+    if (paused || finished) return;
+    const event = advance(world, dt);
+    if (event) {
+      onChange(world);
+      finish(event);
+    }
+  }, FRAME_MS);
+
+  return {
+    world,
+    hop(move) {
+      if (paused || finished) return;
+      const event = hop(world, move);
+      onChange(world);
+      if (event) finish(event);
+    },
+    pause() {
       paused = true;
-      await sleepUnlessStopped(RETRY_MS, hooks.stopped);
-      if (hooks.stopped()) break;
-      controller.prepare({ state: snap.state, moves: snap.moves, playbook: hooks.playbook });
-      next = Date.now() + beatMs;
+    },
+    resume() {
+      paused = false;
+      last = performance.now(); // time doesn't pass while paused
+    },
+    stop: () => finish("stop"),
+    ended: () => finished,
+    done,
+  };
+}
+
+// What Jev is shown at the moment it's asked, plus hindsight for the coach:
+// moves that stay clear for 0.6 s and leave some move clear for the 0.6 s after.
+function snapshot(world: World) {
+  const t = world.t;
+  const safe = MOVES.filter((m) => {
+    const to = targetOf(world.frog, m);
+    if (!clearFor(world, to.row, to.col, t, SAFE_WINDOW_S)) return false;
+    return MOVES.some((n) => {
+      const next = targetOf(to, n);
+      return clearFor(world, next.row, next.col, t + SAFE_WINDOW_S, SAFE_WINDOW_S);
+    });
+  });
+  return { state: describeState(world), moves: describeMoves(world), safe };
+}
+
+// Jev plays: ask about the board as it is now, hop the moment the answer
+// lands (the board has moved on by then; that's the real-time part), ask
+// again. No answer within the timeout, or an error, pauses the world and
+// retries. Resolves with the last few decisions, for the coach.
+export async function driveWithJev(
+  run: Run,
+  getMove: (input: DecideInput, signal: AbortSignal) => Promise<Decision>,
+  hooks: {
+    playbook: string[];
+    onDecision: (d: Decision) => void;
+    onPause?: () => void;
+    onResume?: () => void;
+  },
+): Promise<BeatLog[]> {
+  const log: BeatLog[] = [];
+  while (!run.ended()) {
+    const snap = snapshot(run.world);
+    const sent = performance.now();
+    let decision: Decision;
+    try {
+      decision = await getMove({ state: snap.state, moves: snap.moves, playbook: hooks.playbook }, AbortSignal.timeout(REQUEST_TIMEOUT_MS));
+    } catch {
+      if (run.ended()) break;
+      run.pause();
+      hooks.onPause?.();
+      await sleepUnless(RETRY_MS, run.ended);
+      run.resume();
+      hooks.onResume?.();
       continue;
     }
-    if (paused) hooks.onResume?.();
-    paused = false;
-
-    beats.push({
+    if (run.ended()) break;
+    const ms = Math.round(performance.now() - sent);
+    log.push({
       state: snap.state,
-      move: choice.move,
-      moveText: snap.moves[choice.move],
-      confidence: choice.decision?.confidence ?? 0,
+      move: decision.move,
+      moveText: snap.moves[decision.move],
+      confidence: decision.confidence,
       options: snap.moves,
       safe: snap.safe,
     });
-    if (beats.length > KEEP_BEATS) beats.shift();
-
-    const { event } = step(world, choice.move);
-    hooks.onBeat(world, choice);
-    if (event) return { end: { cause: event, distance: world.furthest }, beats };
-
-    snap = snapshot(world);
-    controller.prepare({ state: snap.state, moves: snap.moves, playbook: hooks.playbook });
-    next += beatMs;
-    if (next < Date.now()) next = Date.now() + beatMs; // never fire beats in a burst after a stall
+    if (log.length > KEEP_DECISIONS) log.shift();
+    run.hop(decision.move);
+    hooks.onDecision({ ...decision, ms });
+    await sleepUnless(DECISION_GAP_MS - ms, run.ended);
   }
-  return { end: null, beats };
-}
-
-// Jev plays: each beat's question goes out as soon as the previous tick lands.
-// An answer that arrives after the tick is thrown away (it was about a board
-// that no longer exists) and the frog waits. Errors, or several late answers
-// in a row, mean Jev is down rather than slow: the clock pauses instead.
-const LATE_IN_A_ROW_IS_OUTAGE = 4;
-export function jevController(getMove: (input: DecideInput, signal: AbortSignal) => Promise<Decision>): Controller {
-  let seq = 0;
-  let ready: Decision | null = null;
-  let failed = false; // latched until an answer arrives, from whichever request failed
-  let lateInARow = 0;
-  let inFlight: AbortController | null = null;
-  return {
-    prepare(input) {
-      const id = ++seq;
-      ready = null;
-      inFlight?.abort(); // the old question is about a board that no longer exists
-      const ctrl = new AbortController();
-      inFlight = ctrl;
-      const sent = performance.now();
-      getMove(input, ctrl.signal).then(
-        (d) => {
-          failed = false;
-          if (id === seq) ready = { ...d, ms: Math.round(performance.now() - sent) };
-        },
-        () => {
-          if (!ctrl.signal.aborted) failed = true;
-        },
-      );
-    },
-    take() {
-      if (ready) {
-        lateInARow = 0;
-        return { move: ready.move, decision: ready, late: false };
-      }
-      if (failed || ++lateInARow >= LATE_IN_A_ROW_IS_OUTAGE) {
-        lateInARow = 0;
-        return "pause";
-      }
-      return { move: "wait", decision: null, late: true };
-    },
-  };
-}
-
-// You play: the last key pressed during a beat is the move; no key means wait.
-export function keyboardController() {
-  let queued: Move | null = null;
-  return {
-    press(m: Move) {
-      queued = m;
-    },
-    prepare() {},
-    take(): Choice {
-      const move = queued ?? "wait";
-      queued = null;
-      return { move, decision: null, late: false };
-    },
-  };
+  return log;
 }
