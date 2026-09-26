@@ -14,7 +14,7 @@ import { system1 } from "../lib/system1";
 const args = process.argv.slice(2).filter((a) => a !== "--");
 const seed = Number(args[0] ?? 5);
 const wanted = Number(args[1] ?? 5);
-const RULE = "Never pick a move whose description shows a bullet or diver arriving within 0.6 s.";
+const RULE = "Never pick a move whose description shows an enemy or its shot arriving within 0.6 s.";
 
 const withTimeout = <T>(p: Promise<T>, signal: AbortSignal) =>
   Promise.race([p, new Promise<T>((_, reject) => signal.addEventListener("abort", () => reject(new Error("timeout"))))]);

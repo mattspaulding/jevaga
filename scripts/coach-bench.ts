@@ -17,7 +17,7 @@ const args = process.argv.slice(2).filter((a) => a !== "--");
 const file = args[0] ?? "deaths.json";
 const seed = Number(args[1] ?? 5);
 const wanted = Number(args[2] ?? 8);
-const REFERENCE = "Never pick a move whose description shows a bullet or diver arriving within 0.6 s.";
+const REFERENCE = "Never pick a move whose description shows an enemy or its shot arriving within 0.6 s.";
 
 const withTimeout = <T>(p: Promise<T>, signal: AbortSignal) =>
   Promise.race([p, new Promise<T>((_, reject) => signal.addEventListener("abort", () => reject(new Error("timeout"))))]);

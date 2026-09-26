@@ -1,12 +1,13 @@
+import { ARRIVAL } from "../describe";
 import { MOVES, type Move } from "../game/world";
 import type { DecideInput, Decision, System1 } from "./types";
 
 // Offline stand-in with Jev's answer shape. Never shown as real: every
 // decision is marked "simulated" and the panel says SIMULATED.
-// Dodges a bullet or diver due within 0.6 s, otherwise fires if something is above.
+// Dodges anything due within 0.6 s, otherwise fires if something is above.
 const soon = (text: string) => {
-  const m = text.match(/(bullet|diver) in (\d+(\.\d+)?) s/);
-  return !!m && Number(m[2]) < 0.6;
+  const m = text.match(ARRIVAL);
+  return !!m && Number(m[1]) < 0.6;
 };
 export const fake: System1 = {
   async decide({ moves }: DecideInput): Promise<Decision> {

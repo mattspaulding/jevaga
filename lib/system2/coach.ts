@@ -1,3 +1,4 @@
+import { ARRIVAL } from "../describe";
 import type { HitBy } from "../game/world";
 import type { Asked } from "../learn/recorder";
 import { MAX_RULE_LENGTH, MAX_RULES } from "../system1/types";
@@ -31,15 +32,15 @@ const SYSTEM = `You coach a fast pilot model flying a ship in a real-time space 
 
 How the game works:
 - The ship sits on the bottom row, positions x 0 (left edge) to 8 (right edge). Left or right glides it about 1.2 columns, then it stops. Stay stops it. Fire stops it and shoots straight up if the gun is ready.
-- Enemy bullets fall straight down. Divers turn toward the ship until they are 4 rows above it, then fall straight. One hit ends the run.
-- The description gives, for where the ship stops and one glide either side, when something reaches the ship ("bullet in 0.4 s", "nothing for 2.5+ s"), counting what a glide passes under on the way.
+- Three kinds of enemy dive at the ship, each its own way. A Drone locks onto a column, moves over and falls straight down it; it never turns or shoots. A Bat zigzags down firing straight down, and 4 rows above the ship turns once toward where the ship is then and flies straight at that spot. A Cyclops parks over a column, shoots twice at where the ship is when it fires, then drops straight down that column. In formation, Bats drop bullets that fall straight down and a Cyclops fires shots that fly straight at where the ship was. One hit ends the run.
+- The description gives, for where the ship stops and one glide either side, what reaches the ship first and when ("Bat bullet in 0.4 s", "Drone in 0.8 s", "nothing for 2.5+ s"), counting what a glide passes under on the way.
 
-What hits the ship: if the ship stops, stays or fires where a bullet or diver arrives, it is hit when it arrives. An option reading "bullet in 0.3 s" means taking it gets the ship hit in 0.3 s. An option reading "nothing for 2.5+ s" is clear for now. So the pilot survives by comparing its options by what arrives and when, and picking one where nothing arrives soon.
+What hits the ship: if the ship stops, stays or fires where an enemy or its shot arrives, it is hit when it arrives. An option reading "Cyclops shot in 0.3 s" means taking it gets the ship hit in 0.3 s. An option reading "nothing for 2.5+ s" is clear for now. So the pilot survives by comparing its options by what arrives and when, and picking one where nothing arrives soon.
 
 Your job: write ONE rule that would have saved the pilot, so it recognises the situation next time. The game tests your rule by replaying this exact moment with the rule added. It also replays earlier deaths the rules already fixed, and checks that the pilot still fires in calm moments. A rule that fails any of those is thrown out.
 
 Write the rule as a situation and what to do about it:
-- Use the description's own words: "bullet in", "diver in", "turning toward you", "falling straight", "where you stop", "a little left", "a little right", "edge", "glide", "stop".
+- Use the description's own words: the enemy names (Drone, Bat, Cyclops, Bat bullet, Cyclops shot), "revving", "falling straight down", "zigzagging", "committed", "parked", "eye glowing", "where you stop", "a little left", "a little right", "edge", "glide", "stop".
 - Say what to do in terms of the moves left, right, stay and fire, or "the option where nothing arrives soon". Only name left or right when the rule says what the description shows on that side; the safe side changes every time.
 - Keep it general: no x positions, rows or exact times that only fit this death. A good rule would have saved many deaths, not only this one.
 - Never tell the pilot to stop firing when nothing is arriving.
@@ -55,8 +56,8 @@ const s2 = (x: number) => `${x.toFixed(2)} s`;
 // When the first thing reaches the ship if it takes this option, from the option's own text.
 export function arrivalOf(text: string): number {
   if (/nothing for 2\.5\+ s/.test(text)) return Infinity;
-  const m = text.match(/(bullet|diver) in (\d+(?:\.\d+)?) s/);
-  return m ? Number(m[2]) : Infinity;
+  const m = text.match(ARRIVAL);
+  return m ? Number(m[1]) : Infinity;
 }
 
 // Hindsight the pilot had in front of it: which options were clear for at least a second.

@@ -348,6 +348,17 @@ export const SPRITES = {
     "RIIR",
     ".RR.",
   ],
+  // Not on the board yet: the bullet recolored orange for a Cyclops's aimed shot.
+  "bullet-aim": [
+    ".YY.",
+    ".OO.",
+    "YOOY",
+    "OFFO",
+    "FWWF",
+    "FWWF",
+    "OFFO",
+    ".OO.",
+  ],
   "star-far": [
     "e",
   ],

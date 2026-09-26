@@ -58,7 +58,7 @@ Unchanged: `pnpm dev`, open http://localhost:3000 (`?seed=N` optional), keys in 
 - **Prediction:** `threatAt(world, x)` simulates forward with the ship parked at `x`; `threatOnPath(world, path)` does the same for a moving ship, and `movePath(world, move)` is where a Jev move would take it. Both return when the ship would first be hit, or null. `targetAbove(world, x)` gives the lowest enemy above `x` and how long a shot takes to reach it.
 
 ### Enemies, carriers and waves
-`lib/game/world.ts` (and new `lib/game/enemies.ts` for the dive plans). PRD ref: `prd.md > The fight`. The behavior and every number are in `enemy-design.md`; this section is how it's built.
+`lib/game/world.ts`. PRD ref: `prd.md > The fight`. The behavior and every number are in `enemy-design.md`; this section is how it's built.
 - **Dive plans.** When an enemy launches, the world fixes its whole plan from the seed and the ship's position at that moment: a Drone's column and rev timer, a Bat's zigzag legs to row 9, a Cyclops's hover point. A plan is plain data on the enemy, so a world copy still replays exactly. The only later decisions are the ones the design names (the Bat's commit at row 9, the Cyclops's aim when it fires), and each reads the ship at a fixed moment.
 - **Telegraphs.** Every plan exposes the path it will fly (`pathOf(enemy)`) so the canvas can draw it and the description can say it. No warning is shorter than 0.8 s.
 - **Formation habits.** The volley picks an enemy; a Bat drops a straight bullet, a Cyclops glows 0.8 s then fires an aimed shot, a Drone is never picked.

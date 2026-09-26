@@ -1,4 +1,4 @@
-import { MOVES, type Move } from "@/lib/game/world";
+import { MOVES, THREATS, type Move } from "@/lib/game/world";
 import { MAX_RULE_LENGTH, MAX_RULES } from "@/lib/system1/types";
 import { writeRule, type CoachInput } from "@/lib/system2/coach";
 
@@ -26,7 +26,7 @@ export async function POST(request: Request) {
     ) &&
     typeof tHit === "number" &&
     !!hitBy &&
-    (hitBy.by === "bullet" || hitBy.by === "diver") &&
+    THREATS.includes(hitBy.by) &&
     typeof hitBy.x === "number" &&
     typeof hitBy.y === "number" &&
     Array.isArray(rules) &&

@@ -3,7 +3,7 @@ import { nextRandom } from "./rng";
 // Jevaga: a Galaga-style fight in continuous time. Positions are in columns
 // (x, 0-8) and rows (y, 0 at the top). Everything moves continuously: the
 // ship glides along the bottom row while it's steered, bullets fall straight
-// down from where they were dropped, divers swoop toward the ship.
+// down from where they were dropped, and each kind of enemy dives its own way.
 
 export const COLS = 9;
 export const ROWS = 14;
@@ -17,27 +17,72 @@ const SHIP_HALF = 0.45; // half the ship's width, in columns
 
 const SHOT_SPEED = 12; // rows per second, upward
 const BULLET_SPEED = 7; // rows per second, downward
-const DIVE_SPEED = 3.5; // rows per second
-const DIVE_STEER = 2; // columns per second toward the ship
-// Below this row a diver stops turning and falls straight, about a second
-// before it reaches the ship, so there is always a moment to get out of its way.
-export const DIVE_LOCK_ROW = SHIP_ROW - 4;
 const RELOAD = 0.35; // seconds between shots
 const MAX_SHOTS = 3;
-const VOLLEY_EVERY = 1.2; // a formation enemy drops a bullet this often
-const DIVE_FIRE_ROWS = [5, 8];
+const VOLLEY_EVERY = 1.2; // a formation enemy fires this often
 export const diveEvery = (wave: number) => Math.max(1.5, 3 * 0.9 ** (wave - 1));
+
+// Each kind dives its own way (devpost/enemy-design.md, section 2). Numbers
+// are rows or columns per second, and seconds.
+// Drone, "Plunge": revs, slides along its row to the column the ship was in,
+// falls straight down it. Never turns, never shoots.
+export const DRONE_REV = 0.8;
+export const DRONE_SLIDE = 4;
+export const DRONE_FALL = 4.5;
+// Bat, "Flutter": zigzags down on a path fixed at launch, fires straight down
+// at rows 5 and 8, and at COMMIT_ROW reads the ship once and flies at that spot.
+export const BAT_FLAP = 0.3;
+export const BAT_DROP = 3;
+const BAT_ZIG = 2.5; // sideways, flipping every leg
+const BAT_LEG = 0.5;
+export const BAT_COMMIT = 4;
+const BAT_FIRE_ROWS = [5, 8];
+export const COMMIT_ROW = SHIP_ROW - 4;
+// Cyclops, "Hover": loops once, parks over the ship's column at HOVER_ROW,
+// fires two aimed shots with its eye glowing before each, then drops.
+export const CY_OPEN = 0.3;
+const CY_LOOP = 0.8;
+const CY_LOOP_R = 0.7;
+const CY_SLIDE = 3;
+export const HOVER_ROW = 6;
+export const CY_GLOW = 0.8; // the eye glows this long before every aimed shot
+const CY_SHOTS = 2;
+export const CY_DROP = 4.5;
+const AIMED_SPEED = 6;
+const HOME_SPEED = 5; // a diver that missed flies back to its slot from the top
+const DIVE_WEIGHT = [1, 2, 3]; // Cyclops, Bat, Drone: Drones dive most often
+const AT_ONCE = 1; // attacks under way at once
+const DIVE_GAP = 0.8; // the next dive waits at least this long after an attack ends
 
 export type Move = "left" | "right" | "stay" | "fire";
 export const MOVES: Move[] = ["left", "right", "stay", "fire"];
 
-export type Dive = { x: number; y: number; fired: number };
-export type Enemy = { id: number; slot: { col: number; row: number }; kind: 0 | 1 | 2; alive: boolean; diving: Dive | null };
-export type Bullet = { x: number; y: number };
-export type Shot = { x: number; y: number };
-export type Pop = { x: number; y: number; kind: 0 | 1 | 2; t: number }; // an enemy destroyed at (x, y) at time t
+export type Kind = 0 | 1 | 2; // Cyclops (row 1), Bat (row 2), Drone (row 3)
+export const KIND_NAME = ["Cyclops", "Bat", "Drone"] as const;
 
-export type HitBy = { by: "bullet" | "diver"; x: number; y: number };
+// rev/flap/open: still in its slot, winding up. home: missed, flying back.
+export type Phase = "rev" | "slide" | "fall" | "flap" | "zig" | "commit" | "open" | "loop" | "park" | "drop" | "home";
+export type Dive = {
+  phase: Phase;
+  since: number; // when this phase began
+  x: number;
+  y: number;
+  col: number; // Drone: the column it falls down; Cyclops: the column it parks over; Bat: the spot it committed to
+  x0: number; // Bat: where its zigzag starts; Cyclops: where its loop starts
+  y0: number;
+  dir: 1 | -1; // Bat: its first zig; Cyclops: which way it loops
+  vx: number; // Bat: sideways speed once committed
+  fired: number;
+};
+export type Enemy = { id: number; slot: { col: number; row: number }; kind: Kind; alive: boolean; diving: Dive | null; charge: number | null }; // charge: a Cyclops in formation fires an aimed shot at this time
+export type Bullet = { x: number; y: number; vx: number; vy: number; from: Kind };
+export type Shot = { x: number; y: number };
+export type Pop = { x: number; y: number; kind: Kind; t: number }; // an enemy destroyed at (x, y) at time t
+
+// What hits the ship, by name, so Jev and the coach can tell enemies apart.
+export const THREATS = ["Drone", "Bat", "Cyclops", "Bat bullet", "Cyclops shot"] as const;
+export type Threat = (typeof THREATS)[number];
+export type HitBy = { by: Threat; x: number; y: number };
 
 // Plain data only (no functions or class instances), so structuredClone
 // copies a fight exactly and a copy plays out the same as the original.
@@ -69,13 +114,14 @@ function formation(): Enemy[] {
   const out: Enemy[] = [];
   let id = 0;
   for (let row = 1; row <= 3; row++)
-    for (let col = 1; col <= 7; col++) out.push({ id: id++, slot: { col, row }, kind: (row - 1) as 0 | 1 | 2, alive: true, diving: null });
+    for (let col = 1; col <= 7; col++) out.push({ id: id++, slot: { col, row }, kind: (row - 1) as Kind, alive: true, diving: null, charge: null });
   return out;
 }
 export const drift = (t: number) => Math.sin(0.6 * t);
+const slotPos = (e: Enemy, t: number) => ({ x: e.slot.col + drift(t), y: e.slot.row });
 
 export function enemyPos(e: Enemy, t: number): { x: number; y: number } {
-  return e.diving ? { x: e.diving.x, y: e.diving.y } : { x: e.slot.col + drift(t), y: e.slot.row };
+  return e.diving ? { x: e.diving.x, y: e.diving.y } : slotPos(e, t);
 }
 
 export function newWorld(seed: number): World {
@@ -109,21 +155,152 @@ function rand(world: World): number {
 // Every run on a seed replays the same fight: same formation, same dive order.
 export const resetRun = (world: World) => newWorld(world.seed);
 
-const bulletHits = (b: Bullet, x: number) => Math.abs(b.x - x) < SHIP_HALF && Math.abs(b.y - SHIP_ROW) < 0.5;
+const bulletHits = (b: { x: number; y: number }, x: number) => Math.abs(b.x - x) < SHIP_HALF && Math.abs(b.y - SHIP_ROW) < 0.5;
 const diverHits = (d: { x: number; y: number }, x: number) => Math.abs(d.x - x) < 0.6 && Math.abs(d.y - SHIP_ROW) < 0.6;
+const attacking = (e: Enemy) => e.alive && !!e.diving && e.diving.phase !== "home";
 
 function shipHit(world: World): HitBy | null {
   const { x } = world.ship;
   const b = world.bullets.find((b) => bulletHits(b, x));
-  if (b) return { by: "bullet", x: b.x, y: b.y };
-  const d = world.enemies.find((e) => e.alive && e.diving && diverHits(e.diving, x))?.diving;
-  return d ? { by: "diver", x: d.x, y: d.y } : null;
+  if (b) return { by: b.from === 0 ? "Cyclops shot" : "Bat bullet", x: b.x, y: b.y };
+  const e = world.enemies.find((e) => attacking(e) && diverHits(e.diving!, x));
+  return e ? { by: KIND_NAME[e.kind], x: e.diving!.x, y: e.diving!.y } : null;
 }
 
-function step(world: World, dt: number): RunEvent {
+const straight = (x: number, y: number): Bullet => ({ x, y: y + 0.5, vx: 0, vy: BULLET_SPEED, from: 1 });
+// A Cyclops shot flies straight at where the ship is when it fires, and never turns.
+function aimed(world: World, x: number, y: number): Bullet {
+  const dx = world.ship.x - x;
+  const dy = SHIP_ROW - (y + 0.5);
+  const len = Math.hypot(dx, dy) || 1;
+  return { x, y: y + 0.5, vx: (dx / len) * AIMED_SPEED, vy: (dy / len) * AIMED_SPEED, from: 0 };
+}
+
+// The Bat's zigzag, fixed at launch: `age` seconds into it, how far across it is.
+export function batZigX(d: Dive, age: number): number {
+  const leg = Math.floor(age / BAT_LEG);
+  const into = age - leg * BAT_LEG;
+  return d.x0 + d.dir * BAT_ZIG * (leg % 2 === 0 ? into : BAT_LEG - into);
+}
+export const batCommitAge = (d: Dive) => (COMMIT_ROW - d.y0) / BAT_DROP;
+
+// Launches a dive. Its whole plan is fixed here from where the ship is now,
+// except the two moments the design names: a Bat reads the ship once at
+// COMMIT_ROW, and a Cyclops aims each shot when it fires.
+export function startDive(world: World, e: Enemy) {
+  const t = world.t;
+  const p = slotPos(e, t);
+  const col = clamp(Math.round(world.ship.x), 0, COLS - 1);
+  const d: Dive = { phase: (["open", "flap", "rev"] as const)[e.kind], since: t, x: p.x, y: p.y, col, x0: p.x, y0: p.y, dir: 1, vx: 0, fired: 0 };
+  if (e.kind === 1) {
+    d.x0 = e.slot.col + drift(t + BAT_FLAP); // where it leaves the formation
+    d.dir = world.ship.x >= d.x0 ? 1 : -1; // its first zig heads toward the ship's side
+    const reach = d.x0 + d.dir * BAT_ZIG * BAT_LEG;
+    if (reach < 0 || reach > COLS - 1) d.dir = d.dir === 1 ? -1 : 1;
+  }
+  if (e.kind === 0) d.dir = col >= p.x ? 1 : -1;
+  e.charge = null;
+  e.diving = d;
+}
+
+function stepDive(world: World, e: Enemy, d: Dive, dt: number) {
+  const t = world.t;
+  const age = t - d.since;
+  const next = (phase: Phase) => {
+    d.phase = phase;
+    d.since = t;
+    d.x0 = d.x;
+    d.y0 = d.y;
+  };
+  const toward = (tx: number, ty: number, speed: number) => {
+    const dx = tx - d.x;
+    const dy = ty - d.y;
+    const dist = Math.hypot(dx, dy);
+    if (dist <= speed * dt) {
+      d.x = tx;
+      d.y = ty;
+      return true;
+    }
+    d.x += (dx / dist) * speed * dt;
+    d.y += (dy / dist) * speed * dt;
+    return false;
+  };
+  switch (d.phase) {
+    case "rev":
+    case "flap":
+    case "open": {
+      const p = slotPos(e, t);
+      d.x = p.x;
+      d.y = p.y;
+      if (d.phase === "rev" && age >= DRONE_REV) next("slide");
+      if (d.phase === "open" && age >= CY_OPEN) next("loop");
+      if (d.phase === "flap" && age >= BAT_FLAP) {
+        d.phase = "zig"; // keeps the start fixed at launch, so the drawn path is the flown one
+        d.since = t;
+      }
+      break;
+    }
+    case "slide":
+      if (e.kind === 2 ? toward(d.col, d.y, DRONE_SLIDE) : toward(d.col, HOVER_ROW, CY_SLIDE)) next(e.kind === 2 ? "fall" : "park");
+      break;
+    case "fall":
+      d.y += DRONE_FALL * dt;
+      break;
+    case "zig":
+      d.x = batZigX(d, age);
+      d.y = d.y0 + BAT_DROP * age;
+      if (d.y >= COMMIT_ROW) {
+        d.col = world.ship.x; // the one time a Bat looks at the ship
+        d.vx = (d.col - d.x) / ((SHIP_ROW - d.y) / BAT_COMMIT);
+        next("commit");
+      }
+      break;
+    case "commit":
+      d.x += d.vx * dt;
+      d.y += BAT_COMMIT * dt;
+      break;
+    case "loop": {
+      const a = (2 * Math.PI * Math.min(age, CY_LOOP)) / CY_LOOP;
+      d.x = d.x0 + d.dir * CY_LOOP_R * Math.sin(a);
+      d.y = d.y0 + CY_LOOP_R * (1 - Math.cos(a));
+      if (age >= CY_LOOP) next("slide");
+      break;
+    }
+    case "park":
+      if (d.fired < CY_SHOTS && age >= CY_GLOW * (d.fired + 1)) {
+        world.bullets.push(aimed(world, d.x, d.y));
+        d.fired++;
+      }
+      if (d.fired >= CY_SHOTS) next("drop");
+      break;
+    case "drop":
+      d.y += CY_DROP * dt;
+      break;
+    case "home": {
+      const p = slotPos(e, t);
+      if (toward(p.x, p.y, HOME_SPEED)) e.diving = null;
+      return;
+    }
+  }
+  if (e.kind === 1 && d.fired < BAT_FIRE_ROWS.length && d.y >= BAT_FIRE_ROWS[d.fired]) {
+    world.bullets.push(straight(d.x, d.y));
+    d.fired++;
+  }
+  if (d.y > ROWS + 0.5) {
+    next("home"); // flew off the bottom: back in at the top of the same column
+    d.y = -1;
+  }
+}
+
+// One physics step. `sim` is for prediction: the ship is put where a planned
+// path says, and nothing new launches (no new dives, no new volleys).
+function step(world: World, dt: number, sim?: { shipX: number }): RunEvent {
   const ship = world.ship;
-  const glide = Math.max(0, Math.min(dt, ship.glideUntil - world.t));
-  ship.x = clamp(ship.x + ship.vx * glide, 0, COLS - 1);
+  if (sim) ship.x = sim.shipX;
+  else {
+    const glide = Math.max(0, Math.min(dt, ship.glideUntil - world.t));
+    ship.x = clamp(ship.x + ship.vx * glide, 0, COLS - 1);
+  }
   world.t += dt;
   world.steps++;
   const t = world.t;
@@ -131,39 +308,48 @@ function step(world: World, dt: number): RunEvent {
 
   for (const s of world.shots) s.y -= SHOT_SPEED * dt;
   world.shots = world.shots.filter((s) => s.y > -1);
-  for (const b of world.bullets) b.y += BULLET_SPEED * dt;
-  world.bullets = world.bullets.filter((b) => b.y < ROWS);
+  for (const b of world.bullets) {
+    b.x += b.vx * dt;
+    b.y += b.vy * dt;
+  }
+  world.bullets = world.bullets.filter((b) => b.y < ROWS && b.x > -1 && b.x < COLS);
 
   for (const e of world.enemies) {
-    const d = e.diving;
-    if (!e.alive || !d) continue;
-    if (d.y < DIVE_LOCK_ROW) d.x += clamp(world.ship.x - d.x, -DIVE_STEER * dt, DIVE_STEER * dt);
-    d.y += DIVE_SPEED * dt;
-    if (d.fired < DIVE_FIRE_ROWS.length && d.y >= DIVE_FIRE_ROWS[d.fired]) {
-      world.bullets.push({ x: d.x, y: d.y + 0.5 });
-      d.fired++;
+    if (!e.alive) continue;
+    if (e.diving) stepDive(world, e, e.diving, dt);
+    else if (e.charge !== null && t >= e.charge) {
+      const p = slotPos(e, t);
+      world.bullets.push(aimed(world, p.x, p.y));
+      e.charge = null;
     }
-    if (d.y > ROWS + 0.5) e.diving = null; // flew off the bottom: back to its slot
   }
 
-  const waiting = () => world.enemies.filter((e) => e.alive && !e.diving);
-  if (t >= world.nextDive) {
-    const pool = waiting();
-    if (pool.length) {
-      const e = pool[Math.floor(rand(world) * pool.length)];
-      const p = enemyPos(e, t);
-      e.diving = { x: p.x, y: p.y, fired: 0 };
+  if (!sim) {
+    const waiting = () => world.enemies.filter((e) => e.alive && !e.diving && e.charge === null);
+    if (world.enemies.filter(attacking).length >= AT_ONCE) world.nextDive = Math.max(world.nextDive, t + DIVE_GAP);
+    else if (t >= world.nextDive) {
+      const pool = waiting();
+      const total = pool.reduce((n, e) => n + DIVE_WEIGHT[e.kind], 0);
+      if (total) {
+        let r = rand(world) * total;
+        const e = pool.find((e) => (r -= DIVE_WEIGHT[e.kind]) < 0) ?? pool[pool.length - 1];
+        startDive(world, e);
+      }
+      world.nextDive = t + diveEvery(world.wave);
     }
-    world.nextDive = t + diveEvery(world.wave);
-  }
-  if (t >= world.nextVolley) {
-    const pool = waiting();
-    if (pool.length) {
-      const e = pool[Math.floor(rand(world) * pool.length)];
-      const p = enemyPos(e, t);
-      world.bullets.push({ x: p.x, y: p.y + 0.5 });
+    // In formation, Bats drop straight bullets and a Cyclops fires an aimed
+    // shot after its eye glows. Drones never fire.
+    if (t >= world.nextVolley) {
+      const pool = waiting().filter((e) => e.kind !== 2);
+      if (pool.length) {
+        const e = pool[Math.floor(rand(world) * pool.length)];
+        if (e.kind === 1) {
+          const p = slotPos(e, t);
+          world.bullets.push(straight(p.x, p.y));
+        } else e.charge = t + CY_GLOW;
+      }
+      world.nextVolley = t + VOLLEY_EVERY;
     }
-    world.nextVolley = t + VOLLEY_EVERY;
   }
 
   for (const s of world.shots) {
@@ -263,30 +449,21 @@ export const gunReadyIn = (world: World) => Math.max(0, world.ship.reloadUntil -
 
 // ---------- prediction (for describing the fight and for tests) ----------
 
-// When would a ship parked at `x` first be hit, from now? Follows the
-// bullets and divers already on screen (not ones that haven't launched yet).
+// When would a ship parked at `x` first be hit, from now? Follows what's
+// already on screen or already committed (not dives or volleys that haven't
+// launched yet).
 export function threatAt(world: World, x: number, horizon = 2.5) {
   return threatOnPath(world, () => x, horizon);
 }
 
-// The same for a ship that is moving: `path(s)` is where it is s seconds from now.
-export function threatOnPath(world: World, path: (s: number) => number, horizon = 2.5): { at: number; by: "bullet" | "diver" } | null {
-  const bullets = world.bullets.map((b) => ({ ...b }));
-  const divers = world.enemies.filter((e) => e.alive && e.diving).map((e) => ({ ...e.diving! }));
-  for (let s = 0; s <= horizon; s += SUBSTEP) {
-    const x = path(s);
-    if (bullets.some((b) => bulletHits(b, x))) return { at: s, by: "bullet" };
-    if (divers.some((d) => diverHits(d, x))) return { at: s, by: "diver" };
-    for (const b of bullets) b.y += BULLET_SPEED * SUBSTEP;
-    for (const d of divers) {
-      if (d.y < DIVE_LOCK_ROW) d.x += clamp(x - d.x, -DIVE_STEER * SUBSTEP, DIVE_STEER * SUBSTEP);
-      d.y += DIVE_SPEED * SUBSTEP;
-      if (d.fired < DIVE_FIRE_ROWS.length && d.y >= DIVE_FIRE_ROWS[d.fired]) {
-        bullets.push({ x: d.x, y: d.y + 0.5 });
-        d.fired++;
-      }
-    }
-  }
+// The same for a ship that is moving: `path(s)` is where it is s seconds from
+// now. Runs a copy of the fight with the same code as the real one, so every
+// enemy is predicted exactly: a Bat commits to where the path has the ship at
+// that moment, and a Cyclops aims at it.
+export function threatOnPath(world: World, path: (s: number) => number, horizon = 2.5): { at: number; by: Threat } | null {
+  if (!world.alive) return null;
+  const w = structuredClone(world);
+  for (let i = 1; i * SUBSTEP <= horizon + 1e-9; i++) if (step(w, SUBSTEP, { shipX: path(i * SUBSTEP) })) return { at: i * SUBSTEP, by: w.hitBy!.by };
   return null;
 }
 
@@ -301,14 +478,14 @@ export function movePath(world: World, move: Move): (s: number) => number {
 }
 
 // The lowest enemy above `x` now, and how long a shot fired now takes to reach it.
-export function targetAbove(world: World, x: number): { rowsUp: number; seconds: number; diving: boolean } | null {
-  let best: { y: number; diving: boolean } | null = null;
+export function targetAbove(world: World, x: number): { rowsUp: number; seconds: number; diving: boolean; kind: Kind } | null {
+  let best: { y: number; diving: boolean; kind: Kind } | null = null;
   for (const e of world.enemies) {
     if (!e.alive) continue;
     const p = enemyPos(e, world.t);
-    if (Math.abs(p.x - x) < 0.5 && p.y < SHIP_ROW && (!best || p.y > best.y)) best = { y: p.y, diving: !!e.diving };
+    if (Math.abs(p.x - x) < 0.5 && p.y < SHIP_ROW && p.y >= 0 && (!best || p.y > best.y)) best = { y: p.y, diving: !!e.diving && e.diving.phase !== "home", kind: e.kind };
   }
   if (!best) return null;
   const rowsUp = SHIP_ROW - best.y;
-  return { rowsUp, seconds: (rowsUp - 0.5) / SHOT_SPEED, diving: best.diving };
+  return { rowsUp, seconds: (rowsUp - 0.5) / SHOT_SPEED, diving: best.diving, kind: best.kind };
 }

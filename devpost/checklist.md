@@ -109,7 +109,7 @@ Build mode: fast (chosen 2026-09-25)
   Learner check: Watch a death, then its replay. Can you see what the rule made Jev do differently?
   Commit: `Show each death's replay on the playfield`
 
-- [ ] **11. Each enemy dives its own way, and Jev can tell them apart**
+- [x] **11. Each enemy dives its own way, and Jev can tell them apart**
   Becomes usable: Drones rev and plunge down a marked column, Bats zigzag along a dotted line and commit at row 9, Cyclopes loop, park and fire aimed shots after a glow; each dive's path is drawn before it lands; formation volleys follow each kind's habit; Jev reads the enemy's name in every threat.
   Why now: Everything else in the enemy design builds on the dives, and the coach can only write enemy-specific rules once deaths name an enemy.
   PRD ref: `prd.md > The fight`
@@ -209,4 +209,4 @@ Activity mode:
 - The coach's first prompt wrote rules tied to one death or wrong about the game, and the one rule it kept made Jev worse. Added `scripts/coach-bench.ts` to score coach variants on the same saved deaths: how often a rule saves its own death, and how many other deaths it also saves. A prompt that explains what hits the ship, plus a hindsight line per moment, brought the coach close to the hand-written rule (each rule saved 5.1 of 7 other deaths on average, the reference 6 of 8). Nemotron's thinking mode did worse and stays off.
 - Added a USAGE window and the matching totals in the headless scripts, showing what Jev and Nemotron have used and cost this session, at Matt's request for the demo video.
 - An enemy design pass was added before the saved learning run and the video (Matt, 2026-09-26: "they all do the exact same thing... what makes it fun is that all the different enemies have their own different attack patterns"). Researched Galaga and its series, fact-checked, and settled on the "Jevaga enemy design" canvas with an Enemy Library in a playful sci-fi tone; the result is `devpost/enemy-design.md`. Slices 11 to 14 build it; honest failures and offline mode move to slice 15.
-
+- Slice 11: the dive code stayed in `lib/game/world.ts` instead of a new `enemies.ts`, because the dives need the world's constants at load time and a split would be a circular import. Prediction is now a copy of the fight stepped forward with no new launches, so it names what hits ("Drone in 0.6 s", "Cyclops shot in 0.4 s") and matched the real fight on 47 of 47 test fights. One attack at a time for now (the wave table in slice 13 raises it). Dumb Jev now lasts 10 to 35 s on seed 5 and dies mostly to Cyclops shots: half the formation volleys are aimed at the ship. A reflex that moves when anything is under 1 s away survives a median 38 s, so the aimed shots are learnable, and they're what the coach has to teach first.
