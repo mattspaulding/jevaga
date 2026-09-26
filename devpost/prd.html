@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PRD: Go Frog Go</title>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Inter:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#f6f4ee;--panel:#fff;--ink:#1d1d1f;--muted:#5f6368;--line:#d9d4c7;--grass:#5fbf3f;--road:#4a4a58;--lane:#f7e27a;--s1:#1f8fff;--s2:#b04ce0;--warn:#f2a900;--bad:#e2463c;--good:#2e9e5b}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#131316;--panel:#1c1c21;--ink:#ececf1;--muted:#a2a2ad;--line:#33333b;--s1:#4aa8ff;--s2:#c77ef0;--warn:#ffc233;--bad:#ff6b61;--good:#4cc27e}}
+:root[data-theme="dark"]{--bg:#131316;--panel:#1c1c21;--ink:#ececf1;--muted:#a2a2ad;--line:#33333b;--s1:#4aa8ff;--s2:#c77ef0;--warn:#ffc233;--bad:#ff6b61;--good:#4cc27e}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 Inter,system-ui,sans-serif}
+main{max-width:900px;margin:0 auto;padding:32px 16px 64px}
+.pix{font-family:"Press Start 2P",ui-monospace,monospace}
+h1{font-size:clamp(17px,3.6vw,24px);line-height:1.4;margin:8px 0 10px}
+h2{font-size:12px;margin:40px 0 12px;color:var(--muted)}
+.tag{display:inline-block;font-size:10px;padding:6px 8px;border:2px solid var(--ink);background:var(--warn);color:#1d1d1f}
+.lede{color:var(--muted);font-size:17px;margin:0}
+.card{background:var(--panel);border:2px solid var(--line);padding:18px 20px;margin:12px 0}
+.expand{border-left:8px solid var(--s1)}
+svg{width:100%;height:auto;display:block}
+svg text{font-family:Inter,system-ui,sans-serif}
+.stepper{display:flex;gap:8px;align-items:center;margin-top:12px;flex-wrap:wrap}
+button{font:inherit;font-size:12px;padding:8px 12px;border:2px solid var(--ink);background:var(--panel);color:var(--ink);cursor:pointer}
+button:hover{background:var(--ink);color:var(--bg)}
+#stepText{min-height:4.5em;margin:12px 0 0}
+.region{transition:opacity .2s}
+.dim .region{opacity:.25}
+.dim .region.on{opacity:1}
+details{background:var(--panel);border:2px solid var(--line);margin:10px 0}
+summary{cursor:pointer;padding:14px 18px;font-weight:600;list-style:none}
+summary::-webkit-details-marker{display:none}
+summary::before{content:"▸ ";color:var(--muted)}
+details[open] summary::before{content:"▾ "}
+.body{padding:0 18px 14px}
+.body ul{margin:6px 0;padding-left:22px}
+.crit{list-style:none;padding-left:4px}
+.crit li::before{content:"☐ ";color:var(--good)}
+.src{font-size:12px;color:var(--muted)}
+.assume{border:2px dashed var(--warn);background:transparent}
+table{width:100%;border-collapse:collapse}
+td{padding:8px 6px;border-top:1px solid var(--line);vertical-align:top}
+td:first-child{font-weight:600;white-space:nowrap;padding-right:14px}
+footer{margin-top:48px;color:var(--muted);font-size:13px}
+</style>
+</head>
+<body>
+<main>
+<span class="tag pix">PRD · APPROVED</span>
+<h1 class="pix">Go Frog Go</h1>
+<p class="lede">A 16-bit endless road-crossing game. A frog played by Jev that starts knowing only "jump forward," taught by Nemotron after every death.</p>
+
+<div class="card expand">
+  <strong>What got specific since scope.</strong> Scope said "Press play" and "Nemotron writes a lesson." Now we know it's one split screen, the frog moves on a five-move grid, the playbook starts as one line ("jump forward"), the coach only teaches after deaths and never moves the frog, and runs restart on their own until Stop.
+</div>
+
+<h2 class="pix">THE SCREEN, STEP BY STEP</h2>
+<div class="card">
+  <svg id="screen" viewBox="0 0 800 440" role="img" aria-label="Layout: game on the left half; right panel with Decision, Coach, Playbook and Runs sections; Start and Stop controls at the bottom right.">
+    <g class="region" id="r-game">
+      <rect x="10" y="10" width="400" height="420" fill="#5fbf3f"/>
+      <rect x="10" y="70" width="400" height="120" fill="#4a4a58"/>
+      <rect x="10" y="240" width="400" height="120" fill="#4a4a58"/>
+      <g fill="#f7e27a"><rect x="20" y="129" width="20" height="3"/><rect x="60" y="129" width="20" height="3"/><rect x="100" y="129" width="20" height="3"/><rect x="140" y="129" width="20" height="3"/><rect x="180" y="129" width="20" height="3"/><rect x="220" y="129" width="20" height="3"/><rect x="260" y="129" width="20" height="3"/><rect x="300" y="129" width="20" height="3"/><rect x="340" y="129" width="20" height="3"/><rect x="380" y="129" width="20" height="3"/><rect x="20" y="299" width="20" height="3"/><rect x="60" y="299" width="20" height="3"/><rect x="100" y="299" width="20" height="3"/><rect x="140" y="299" width="20" height="3"/><rect x="180" y="299" width="20" height="3"/><rect x="220" y="299" width="20" height="3"/><rect x="260" y="299" width="20" height="3"/><rect x="300" y="299" width="20" height="3"/><rect x="340" y="299" width="20" height="3"/><rect x="380" y="299" width="20" height="3"/></g>
+      <rect x="60" y="85" width="60" height="30" fill="#e8423a" stroke="#1b1b28" stroke-width="3"/>
+      <rect x="250" y="145" width="60" height="30" fill="#3b6fe0" stroke="#1b1b28" stroke-width="3"/>
+      <rect x="120" y="255" width="60" height="30" fill="#f2c233" stroke="#1b1b28" stroke-width="3"/>
+      <rect x="300" y="315" width="60" height="30" fill="#9b4de0" stroke="#1b1b28" stroke-width="3"/>
+      <rect id="frog" x="195" y="385" width="28" height="28" fill="#3fbf6a" stroke="#1b1b28" stroke-width="3"/>
+      <rect x="20" y="20" width="110" height="26" fill="#1b1b28" opacity=".7"/><text x="30" y="38" fill="#fff" font-size="13">distance 34</text>
+      
+      <g id="splat" opacity="0"><text x="209" y="408" text-anchor="middle" font-size="26">💥</text></g>
+    </g>
+    <g class="region" id="r-decision"><rect x="425" y="10" width="365" height="90" fill="var(--panel)" stroke="#1f8fff" stroke-width="3"/><text x="440" y="36" font-size="13" font-weight="600" fill="var(--ink)">DECISION · JEV</text><text id="decText" x="440" y="62" font-size="15" fill="var(--ink)">forward 0.92</text><rect x="440" y="74" width="330" height="12" fill="var(--line)"/><rect id="bar" x="440" y="74" width="304" height="12" fill="#1f8fff"/></g>
+    <g class="region" id="r-coach"><rect x="425" y="110" width="365" height="60" fill="var(--panel)" stroke="#b04ce0" stroke-width="3"/><text x="440" y="136" font-size="13" font-weight="600" fill="var(--ink)">COACH · NEMOTRON</text><text id="coachText" x="440" y="158" font-size="14" fill="var(--muted)">idle</text></g>
+    <g class="region" id="r-playbook"><rect x="425" y="180" width="365" height="130" fill="var(--panel)" stroke="var(--line)" stroke-width="3"/><text x="440" y="206" font-size="13" font-weight="600" fill="var(--ink)">PLAYBOOK</text><text id="lesson1" x="440" y="232" font-size="13" fill="var(--ink)">1. Jump forward.</text><text id="lesson2" x="440" y="256" font-size="13" fill="var(--ink)" opacity="0">2. Wait when a car is 2 tiles away in the next lane.</text></g>
+    <g class="region" id="r-runs"><rect x="425" y="320" width="365" height="70" fill="var(--panel)" stroke="var(--line)" stroke-width="3"/><text x="440" y="346" font-size="13" font-weight="600" fill="var(--ink)">RUNS</text><text id="runsText" x="440" y="372" font-size="14" fill="var(--ink)">#1 12 · #2 31</text></g>
+    <g class="region" id="r-controls"><rect x="425" y="400" width="80" height="30" fill="var(--panel)" stroke="var(--ink)" stroke-width="2"/><text x="465" y="420" text-anchor="middle" font-size="13" fill="var(--ink)">Start</text><rect x="515" y="400" width="80" height="30" fill="var(--panel)" stroke="var(--ink)" stroke-width="2"/><text x="555" y="420" text-anchor="middle" font-size="13" fill="var(--ink)">Stop</text></g>
+  </svg>
+  <div class="stepper"><button id="prev">◀ Back</button><button id="next">Next ▶</button><span id="count" class="src"></span></div>
+  <p id="stepText"></p>
+</div>
+
+<h2 class="pix">LOOK &amp; FEEL</h2>
+<div class="card">16-bit SNES style: rich palette, dark sprite outlines, shaded lower edges, textured two-tone grass. A frog. Colored cars on dark asphalt with yellow dashes. The right panel uses the same pixel font and palette so it reads as one game. Original sprites and name only. <span class="src">Picked by Matt from a live sample.</span></div>
+
+<h2 class="pix">BEHAVIOR &amp; HOW WE'LL KNOW</h2>
+<details open><summary>Endless road</summary><div class="body">
+  <p>Lanes generate ahead forever: grass strips and road runs, cars at varied speeds and directions. The frog moves on a grid: forward, left, right, back, wait.</p>
+  <ul class="crit"><li>Start sends the frog up the road with no human input</li><li>No finish line; the road keeps generating</li><li>A car touching the frog ends the run</li></ul></div></details>
+<details><summary>Fast decisions (System 1 · Jev)</summary><div class="body">
+  <p>Each beat, Jev picks one of five moves from the nearby lanes, cars and the playbook, with a confidence. Jev makes every move in every run. Reached through a swappable adapter.</p>
+  <ul class="crit"><li>Every hop shows its move and confidence</li><li>With only "jump forward" in the playbook, the frog hops forward into traffic</li></ul></div></details>
+<details><summary>Coach lessons (System 2 · after each death)</summary><div class="body">
+  <p>The coach never moves the frog. After a hit, Nemotron reads the last several moves and what hit the frog, and writes one lesson. Jev plays every later run with the whole playbook.</p>
+  <ul class="crit"><li>A new numbered lesson appears after each death</li><li>Lessons are specific to what happened, not generic</li><li>The next run visibly handles what caused the last death</li></ul></div></details>
+<details><summary>Run history</summary><div class="body">
+  <ul class="crit"><li>Each run's distance is listed; best is highlighted</li><li>Over several runs, later distances are clearly higher than run 1</li></ul></div></details>
+
+<h2 class="pix">STATES</h2>
+<div class="card"><table>
+  <tr><td>Before Start</td><td>Frog on starting grass, playbook "1. Jump forward.", "Run 1", Start button.</td></tr>
+  <tr><td>Coach slow or errors</td><td>Next run starts without a new lesson; the panel says so.</td></tr>
+  <tr><td>Model unavailable</td><td>Game doesn't start; panel names which model is down. Nothing pretends to play.</td></tr>
+  <tr><td>Stopped</td><td>Current run ends; playbook and history stay.</td></tr>
+  <tr><td>Reload</td><td>Back to "jump forward." Nothing is saved.</td></tr>
+</table></div>
+
+<h2 class="pix">CONFIRM THESE</h2>
+<div class="card assume"><ul style="margin:0;padding-left:20px">
+  <li>Runs restart automatically until Stop, so the video can be one continuous take.</li>
+  <li>Nothing persists between page loads.</li>
+</ul></div>
+
+<h2 class="pix">BOUNDARY</h2>
+<details><summary>Deferred from the POC</summary><div class="body"><ul>
+  <li><strong>Hosted URL + open-source license</strong>: Nebius needs them by Oct 30, after Basics closes Oct 26</li>
+  <li><strong>Saving the playbook</strong>: would need storage; reset on reload is fine for a demo</li></ul></div></details>
+<details><summary>Later</summary><div class="body"><ul><li>Race Jev against another System One model</li><li>Rivers, logs and trains</li><li>Human vs. AI</li><li>Sound</li><li>Let the coach step in mid-run once the playbook is mature</li></ul></div></details>
+<details><summary>Non-goals</summary><div class="body"><ul><li>Nintendo, Crossy Road or Tetris names or art (IP)</li><li>Reading the game from pixels</li><li>Training or fine-tuning a model</li><li>Raspberry Pi hardware</li></ul></div></details>
+
+<footer>Companion to <code>devpost/prd.md</code>, which is canonical.</footer>
+</main>
+<script>
+const svg=document.getElementById("screen");
+const $=id=>document.getElementById(id);
+const steps=[
+ {on:["r-game","r-playbook","r-controls"],t:"1. The page opens. Frog on the starting grass. The playbook has exactly one line: \"Jump forward.\"",frog:385,dec:"—",bar:0,coach:"idle",splat:0,l2:0,runs:"Run 1"},
+ {on:["r-controls","r-game"],t:"2. Press Start. The frog starts up the road on its own, one hop per beat.",frog:385,dec:"—",bar:0,coach:"idle",splat:0,l2:0,runs:"Run 1"},
+ {on:["r-decision","r-game"],t:"3. Each beat, Jev picks a move and shows its confidence. With only \"jump forward\" to go on, it's very sure.",frog:330,dec:"forward 0.97",bar:320,coach:"idle",splat:0,l2:0,runs:"Run 1"},
+ {on:["r-game","r-runs"],t:"4. It hops straight into traffic. Run 1 ends and its distance goes into the history.",frog:290,dec:"forward 0.97",bar:320,coach:"idle",splat:1,l2:0,runs:"#1 3"},
+ {on:["r-coach","r-playbook"],t:"5. The coach reads the moves before the hit and what hit the frog, and writes one lesson. It appears in the playbook.",frog:290,dec:"—",bar:0,coach:"thinking… → new lesson",splat:1,l2:1,runs:"#1 3"},
+ {on:["r-game","r-decision","r-playbook"],t:"6. Run 2 starts on its own. At that same kind of lane, Jev now waits. The coach never moves the frog; the lesson does.",frog:330,dec:"wait 0.84",bar:277,coach:"idle",splat:0,l2:1,runs:"#1 3 · Run 2"},
+ {on:["r-runs","r-playbook"],t:"7. Runs keep going until Stop. The playbook grows and the distances climb.",frog:385,dec:"forward 0.91",bar:300,coach:"idle",splat:0,l2:1,runs:"#1 3 · #2 14 · #3 41 · #4 80 ★"}
+];
+let i=0;
+function show(){
+ const s=steps[i];svg.classList.add("dim");
+ svg.querySelectorAll(".region").forEach(g=>g.classList.toggle("on",s.on.includes(g.id)));
+ $("frog").setAttribute("y",s.frog);$("decText").textContent=s.dec;$("bar").setAttribute("width",s.bar);
+ $("coachText").textContent=s.coach;$("splat").setAttribute("opacity",s.splat);$("splat").querySelector("text").setAttribute("y",s.frog+23);
+ $("lesson2").setAttribute("opacity",s.l2);$("runsText").textContent=s.runs;
+ $("stepText").textContent=s.t;$("count").textContent=(i+1)+" / "+steps.length;
+}
+$("next").onclick=()=>{i=(i+1)%steps.length;show()};
+$("prev").onclick=()=>{i=(i-1+steps.length)%steps.length;show()};
+show();
+</script>
+</body>
+</html>

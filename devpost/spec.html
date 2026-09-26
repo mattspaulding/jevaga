@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Spec: Go Frog Go</title>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Inter:wght@400;600&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#f6f4ee;--panel:#fff;--ink:#1d1d1f;--muted:#5f6368;--line:#d9d4c7;--jev:#1f8fff;--nem:#b04ce0;--page:#2e9e5b;--warn:#f2a900;--bad:#e2463c;--code:#f1ede3}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#131316;--panel:#1c1c21;--ink:#ececf1;--muted:#a2a2ad;--line:#33333b;--jev:#4aa8ff;--nem:#c77ef0;--page:#4cc27e;--warn:#ffc233;--bad:#ff6b61;--code:#24242b}}
+:root[data-theme="dark"]{--bg:#131316;--panel:#1c1c21;--ink:#ececf1;--muted:#a2a2ad;--line:#33333b;--jev:#4aa8ff;--nem:#c77ef0;--page:#4cc27e;--warn:#ffc233;--bad:#ff6b61;--code:#24242b}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 Inter,system-ui,sans-serif}
+main{max-width:920px;margin:0 auto;padding:32px 16px 64px}
+.pix{font-family:"Press Start 2P",ui-monospace,monospace}
+h1{font-size:clamp(17px,3.6vw,24px);line-height:1.4;margin:8px 0 10px}
+h2{font-size:12px;margin:40px 0 12px;color:var(--muted)}
+.tag{display:inline-block;font-size:10px;padding:6px 8px;border:2px solid var(--ink);background:var(--warn);color:#1d1d1f}
+.lede{color:var(--muted);font-size:17px;margin:0}
+.card{background:var(--panel);border:2px solid var(--line);padding:18px 20px;margin:12px 0}
+.plain{border-left:8px solid var(--page)}
+svg{width:100%;height:auto;display:block}
+svg text{font-family:Inter,system-ui,sans-serif;fill:var(--ink)}
+.node rect{fill:var(--panel);stroke-width:3}
+.stepper{display:flex;gap:8px;align-items:center;margin-top:12px;flex-wrap:wrap}
+button{font:inherit;font-size:12px;padding:8px 12px;border:2px solid var(--ink);background:var(--panel);color:var(--ink);cursor:pointer}
+button:hover{background:var(--ink);color:var(--bg)}
+#stepText{min-height:4.5em;margin:12px 0 0}
+#stepFile{font:13px "JetBrains Mono",ui-monospace,monospace;color:var(--muted)}
+.dim .node,.dim .edge{opacity:.22;transition:opacity .2s}
+.dim .on{opacity:1}
+details{background:var(--panel);border:2px solid var(--line);margin:10px 0}
+summary{cursor:pointer;padding:14px 18px;font-weight:600;list-style:none}
+summary::-webkit-details-marker{display:none}
+summary::before{content:"▸ ";color:var(--muted)}
+details[open] summary::before{content:"▾ "}
+.body{padding:0 18px 14px}
+.src{font-size:12px;color:var(--muted)}
+code,pre{font-family:"JetBrains Mono",ui-monospace,monospace;font-size:13px}
+pre{background:var(--code);padding:12px;overflow-x:auto;margin:8px 0}
+code{background:var(--code);padding:1px 4px}
+.j{border-left:8px solid var(--jev)} .n{border-left:8px solid var(--nem)} .g{border-left:8px solid var(--page)}
+.risk{border:2px dashed var(--bad)}
+.confirm{border:2px dashed var(--warn)}
+table{width:100%;border-collapse:collapse;font-size:15px}
+td,th{padding:8px 6px;border-top:1px solid var(--line);vertical-align:top;text-align:left}
+.tree{font:13px/1.6 "JetBrains Mono",ui-monospace,monospace;white-space:pre;overflow-x:auto;background:var(--code);padding:14px}
+.tree b{color:var(--jev);font-weight:400}.tree i{color:var(--nem);font-style:normal}.tree u{color:var(--page);text-decoration:none}
+footer{margin-top:48px;color:var(--muted);font-size:13px}
+</style>
+</head>
+<body>
+<main>
+<span class="tag pix">SPEC · APPROVED</span>
+<h1 class="pix">Go Frog Go<br><small style="font-size:11px;color:var(--muted)">technical spec</small></h1>
+<p class="lede">Next.js on Vercel (Strawberry Digital). Jev picks every move. Nemotron on Nebius teaches after every run.</p>
+
+<h2 class="pix">IN PLAIN LANGUAGE</h2>
+<div class="card plain">
+  <p style="margin-top:0"><strong>The page</strong> draws the road and runs the clock in beats: the frog moves, then the cars move. It waits for each move, so a slow answer only pauses the game.</p>
+  <p><strong style="color:var(--jev)">Jev</strong> gets the situation in plain sentences ("In lane +1, a car reaches column 4 this beat") and the playbook, and picks one of five moves with a confidence. It's reached through Vercel AI Gateway, with no waitlist.</p>
+  <p style="margin-bottom:0"><strong style="color:var(--nem)">Nemotron</strong> on Nebius Token Factory reads the last few beats after a run ends and writes what happened plus one rule. The rule joins the playbook, and the next run replays the same road.</p>
+</div>
+
+<h2 class="pix">ONE BEAT, ONE DEATH</h2>
+<div class="card">
+<svg id="arch" viewBox="0 0 860 400" role="img" aria-label="Architecture: browser page with game loop and describe module calls /api/move which calls Jev via Vercel AI Gateway; on a run end, the page calls /api/lesson which calls Nemotron on Nebius Token Factory; the lesson returns to the playbook.">
+  <defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--muted)"/></marker></defs>
+  <rect x="10" y="10" width="330" height="380" fill="none" stroke="var(--line)" stroke-width="2" stroke-dasharray="6 4"/><text x="24" y="34" font-size="12" fill="var(--muted)">BROWSER · app/page.tsx</text>
+  <rect x="370" y="10" width="200" height="380" fill="none" stroke="var(--line)" stroke-width="2" stroke-dasharray="6 4"/><text x="384" y="34" font-size="12" fill="var(--muted)">VERCEL · server routes</text>
+  <rect x="600" y="10" width="250" height="380" fill="none" stroke="var(--line)" stroke-width="2" stroke-dasharray="6 4"/><text x="614" y="34" font-size="12" fill="var(--muted)">HOSTED MODELS</text>
+  <g class="node" id="n-world"><rect x="30" y="50" width="140" height="60" stroke="var(--page)"/><text x="100" y="76" text-anchor="middle" font-weight="600">world + loop</text><text x="100" y="96" text-anchor="middle" font-size="11" fill="var(--muted)">lib/game</text></g>
+  <g class="node" id="n-desc"><rect x="190" y="50" width="130" height="60" stroke="var(--page)"/><text x="255" y="76" text-anchor="middle" font-weight="600">describe</text><text x="255" y="96" text-anchor="middle" font-size="11" fill="var(--muted)">world → prose</text></g>
+  <g class="node" id="n-panel"><rect x="30" y="180" width="290" height="60" stroke="var(--page)"/><text x="175" y="206" text-anchor="middle" font-weight="600">Panel: Decision · Coach · Playbook · Runs</text><text x="175" y="226" text-anchor="middle" font-size="11" fill="var(--muted)">components/Panel.tsx</text></g>
+  <g class="node" id="n-canvas"><rect x="30" y="300" width="290" height="60" stroke="var(--page)"/><text x="175" y="326" text-anchor="middle" font-weight="600">GameCanvas: road, cars, frog</text><text x="175" y="346" text-anchor="middle" font-size="11" fill="var(--muted)">16-bit sprites, pixelated</text></g>
+  <g class="node" id="n-move"><rect x="390" y="50" width="160" height="60" stroke="var(--jev)"/><text x="470" y="76" text-anchor="middle" font-weight="600">/api/move</text><text x="470" y="96" text-anchor="middle" font-size="11" fill="var(--muted)">system1/jev.ts</text></g>
+  <g class="node" id="n-lesson"><rect x="390" y="250" width="160" height="60" stroke="var(--nem)"/><text x="470" y="276" text-anchor="middle" font-weight="600">/api/lesson</text><text x="470" y="296" text-anchor="middle" font-size="11" fill="var(--muted)">system2/nemotron.ts</text></g>
+  <g class="node" id="n-jev"><rect x="620" y="50" width="210" height="60" stroke="var(--jev)"/><text x="725" y="76" text-anchor="middle" font-weight="600">Jev</text><text x="725" y="96" text-anchor="middle" font-size="11" fill="var(--muted)">Vercel AI Gateway</text></g>
+  <g class="node" id="n-nem"><rect x="620" y="250" width="210" height="60" stroke="var(--nem)"/><text x="725" y="276" text-anchor="middle" font-weight="600">Nemotron 3.5 Lightning</text><text x="725" y="296" text-anchor="middle" font-size="11" fill="var(--muted)">Nebius Token Factory</text></g>
+  <g class="edge" id="e1"><path d="M170 80 H186" stroke="var(--muted)" stroke-width="2" marker-end="url(#ar)"/></g>
+  <g class="edge" id="e2"><path d="M320 80 H386" stroke="var(--jev)" stroke-width="2" marker-end="url(#ar)"/><text x="353" y="72" text-anchor="middle" font-size="10" fill="var(--jev)">state</text></g>
+  <g class="edge" id="e3"><path d="M550 80 H616" stroke="var(--jev)" stroke-width="2" marker-end="url(#ar)"/><text x="583" y="72" text-anchor="middle" font-size="10" fill="var(--jev)">Choice</text></g>
+  <g class="edge" id="e4"><path d="M616 100 C560 150 470 150 330 205" stroke="var(--jev)" stroke-width="2" stroke-dasharray="5 4" marker-end="url(#ar)" fill="none"/><text x="520" y="150" font-size="10" fill="var(--jev)">move + confidence</text></g>
+  <g class="edge" id="e5"><path d="M175 240 V296" stroke="var(--muted)" stroke-width="2" marker-end="url(#ar)"/></g>
+  <g class="edge" id="e6"><path d="M320 225 L386 270" stroke="var(--nem)" stroke-width="2" marker-end="url(#ar)"/><text x="330" y="262" font-size="10" fill="var(--nem)">last 6 beats</text></g>
+  <g class="edge" id="e7"><path d="M550 280 H616" stroke="var(--nem)" stroke-width="2" marker-end="url(#ar)"/></g>
+  <g class="edge" id="e8"><path d="M616 300 C560 350 420 350 320 232" stroke="var(--nem)" stroke-width="2" stroke-dasharray="5 4" marker-end="url(#ar)" fill="none"/><text x="470" y="352" text-anchor="middle" font-size="10" fill="var(--nem)">what happened + rule</text></g>
+</svg>
+<div class="stepper"><button id="prev">◀ Back</button><button id="next">Next ▶</button><span id="count" class="src"></span></div>
+<p id="stepText"></p><div id="stepFile"></div>
+</div>
+
+<h2 class="pix">WHAT JEV SEES</h2>
+<div class="card j">
+<p style="margin-top:0">Facts are phrased as <strong>time</strong>, so "this beat" means moving there now gets you hit. Move descriptions carry facts, never verdicts.</p>
+<pre>POST https://ai-gateway.vercel.sh/typesafe/v1/systemone
+{ "model": "typesafe-ai/jev",
+  "state": "You are on grass, row 0, column 4.
+            Lane +1 (road, cars move left 2 per beat): a car reaches column 4 this beat.
+            Lane +2 (road): a car reaches column 4 in 3 beats.
+            Behind you: the edge; you can't go back.",
+  "questions": { "move": { "type": "choice",
+    "instructions": "Pick the frog's next move... Playbook:\n1. Jump forward.",
+    "criteria": {
+      "forward": "Step into lane +1, column 4. A car there reaches column 4 this beat.",
+      "wait":    "Stay on grass, column 4. No cars on grass.",
+      "left":    "Stay on grass, move to column 3.", "right": "...", "back": "..." } } } }</pre>
+<p class="src" style="margin-bottom:0">Returns <code>answers.move.choice</code>, <code>.probabilities</code> for all five, <code>.confidence</code>. About $0.013 per 1,000 beats.</p>
+</div>
+
+<h2 class="pix">THE PIECES</h2>
+<details class="g"><summary>Game world · lib/game/world.ts <span class="src">→ prd: Endless road</span></summary><div class="body">
+<ul>
+<li>9 columns. Each row generated from <code>rng(seed, rowIndex)</code>: grass 1–2 rows, road runs 1–3 lanes.</li>
+<li>Per lane: direction, speed 1–2, 1–3 cars, with <strong>Σ(length + speed) ≤ 5</strong> so at least 4 cells are clear each beat.</li>
+<li><strong>Solvability check:</strong> car positions repeat every 9 beats, so a BFS over (row, col, beat mod 9) proves each road run can be crossed, or regenerates it.</li>
+<li>Cars wrap around modulo 9. <code>head</code> is the front cell. <strong>Collision:</strong> the frog moves first; it's hit if its new cell is anywhere the car covers or sweeps through that beat.</li>
+<li>Edge moves become <code>wait</code>. Distance = furthest row reached.</li></ul></div></details>
+<details class="g"><summary>Beat loop · lib/game/loop.ts <span class="src">→ prd: Core Journey</span></summary><div class="body">
+<ul><li>getMove → step → render → at least 350 ms per beat.</li>
+<li>Run ends on <strong>hit</strong>, or <strong>stalled</strong> after 15 beats with no forward progress. Both go to the coach.</li>
+<li>Keeps the last 6 beats for the lesson.</li></ul></div></details>
+<details class="j"><summary>Fast decisions · lib/system1 + /api/move <span class="src">→ prd: Fast decisions (System 1)</span></summary><div class="body">
+<ul><li><code>decide({state, moves, playbook}) → {move, probabilities, confidence, source}</code></li>
+<li><code>jev.ts</code>: plain fetch to the gateway. <code>fake.ts</code>: offline stand-in, panel shows <strong>SIMULATED</strong>. Chosen by <code>SYSTEM1</code>.</li>
+<li>Invalid answers are errors; the route never guesses.</li></ul></div></details>
+<details class="n"><summary>Coach lessons · lib/system2 + /api/lesson <span class="src">→ prd: Coach lessons (System 2)</span></summary><div class="body">
+<ul><li>Token Factory chat completions, <code>nvidia/Nemotron-3_5-Lightning</code>, <code>max_tokens: 400</code>, thinking off via <code>chat_template_kwargs.enable_thinking: false</code>.</li>
+<li>Replies with two lines: <code>What happened:</code> and <code>Rule:</code> (≤20 words, game vocabulary).</li>
+<li>If the reply is empty or cut off, the lesson counts as failed and the next run starts unchanged.</li></ul></div></details>
+<details class="g"><summary>Panel &amp; canvas · components/ <span class="src">→ prd: Screens and Layout, Look and Feel</span></summary><div class="body">
+<ul><li>Decision box "JEV · via Vercel AI Gateway": move, confidence bar, five probability bars.</li>
+<li>Coach box "NEMOTRON · Nebius Token Factory": thinking…, what happened, the new rule.</li>
+<li>Playbook (newest flashes), runs with distance, a timeout marker, the best run starred, and the seed.</li>
+<li>Style-B palette, 16×16 outlined sprites, Press Start 2P headings.</li></ul></div></details>
+
+<h2 class="pix">FILES</h2>
+<div class="tree">app/
+  page.tsx               <u>split layout, owns Session</u>
+  api/move/route.ts      <b>→ Jev</b>
+  api/lesson/route.ts    <i>→ Nemotron</i>
+components/GameCanvas.tsx, Panel.tsx
+lib/game/               <u>world · rng · loop · render · sprites</u>
+lib/describe.ts         <u>world → prose, time-based</u>
+lib/system1/            <b>types · jev · fake · index</b>
+lib/system2/nemotron.ts <i>lesson writer</i>
+scripts/lesson-test.ts  <u>BUILD STEP 1</u>
+.env.example · README.md · LICENSE · devpost/</div>
+
+<h2 class="pix">BUILD STEP 1: THE LESSON TEST</h2>
+<div class="card risk">
+<p style="margin-top:0"><strong>Your question:</strong> how does a lesson change the frog's next move? Jev scores each move's description against the state and the instructions. A rule in the same words should shift the scores, but evidence from CLM, Jev's open lookalike, says written rules steer weakly. So we measure it before building the game.</p>
+<table>
+<tr><th></th><th>Fatal case<br><span class="src">car reaches col 4 this beat</span></th><th>Control<br><span class="src">car reaches col 4 in 2 beats</span></th></tr>
+<tr><td>Playbook "Jump forward."</td><td>forward should win (so run 1 dies)</td><td>forward should win</td></tr>
+<tr><td>+ lesson in instructions</td><td><strong>wait</strong> should win</td><td>forward should still win</td></tr>
+<tr><td>+ lesson in the wait description</td><td>does it shift more?</td><td>forward should still win</td></tr>
+</table>
+<p><strong>First real run (Sep 25):</strong> "Jump forward" alone gives forward 0.71 in the fatal case. With the lesson in the instructions, <strong>wait 0.93</strong>, and the control stays forward 0.79. The lesson works, and the instructions slot beats the description slot (0.87).</p>
+<p style="margin-bottom:0" class="src">Plus one real Nemotron lesson call to confirm thinking is off. If no placement flips the fatal case, we stop and decide together before building more.</p>
+</div>
+
+<h2 class="pix">RUN IT</h2>
+<div class="card"><pre>pnpm install
+cp .env.example .env.local   # you paste AI_GATEWAY_API_KEY + NEBIUS_API_KEY
+pnpm dev                     # http://localhost:3000   (?seed=1234 to pick a road)</pre>
+<p class="src" style="margin-bottom:0">Deploy: a Vercel project under <strong>Strawberry Digital</strong>, kept live through Nebius judging (Dec 1–15) for pennies. Video: narrated, under 3 minutes, public on YouTube. Repo: public, MIT or Apache-2.0.</p></div>
+
+<h2 class="pix">CONFIRM THESE</h2>
+<div class="card confirm"><ul style="margin:0;padding-left:20px">
+<li>Same road every run within a session (a reload or <code>?seed=</code> changes it).</li>
+<li>A <strong>stall rule</strong>: 15 beats with no forward progress ends the run as a timeout, and the coach teaches from it.</li>
+<li>The coach shows a one-sentence "what happened" next to its rule, so Nemotron's reasoning is on screen.</li>
+<li>Nemotron 3.5 Lightning writes the lessons (same price as Nano, about 5x faster).</li>
+<li>Scope and PRD now say Jev instead of CLM, to match your decision.</li>
+</ul></div>
+
+<footer>Companion to <code>devpost/spec.md</code>, which is canonical.</footer>
+</main>
+<script>
+const svg=document.getElementById("arch"),$=id=>document.getElementById(id);
+const steps=[
+ {on:["n-world"],t:"The page opens with playbook \"1. Jump forward.\" and a road generated from the seed. Start sends one move request first; if Jev is down, the game doesn't start.",f:"app/page.tsx · lib/game/world.ts"},
+ {on:["n-world","n-desc","e1"],t:"Each beat, describe turns the world into prose: your lane, three lanes ahead, one behind, and when each car reaches your column.",f:"lib/describe.ts"},
+ {on:["n-desc","n-move","n-jev","e2","e3"],t:"The page posts the state, five move descriptions and the playbook to /api/move, which asks Jev one Choice question through Vercel AI Gateway. The key stays on the server.",f:"app/api/move/route.ts · lib/system1/jev.ts"},
+ {on:["n-jev","n-panel","e4"],t:"Jev returns a move, five probabilities and a confidence. The Decision box shows them.",f:"components/Panel.tsx"},
+ {on:["n-world","n-canvas","n-panel","e5"],t:"The frog moves, then the cars move. The canvas redraws. At least 350 ms per beat.",f:"lib/game/loop.ts · lib/game/render.ts"},
+ {on:["n-panel","n-lesson","e6"],t:"The frog is hit, or stalls for 15 beats. The page sends the last 6 beats and the cause to /api/lesson.",f:"app/api/lesson/route.ts"},
+ {on:["n-lesson","n-nem","e7"],t:"Nemotron 3.5 Lightning on Nebius Token Factory, with thinking off, writes \"What happened\" and one \"Rule\" in the game's own vocabulary.",f:"lib/system2/nemotron.ts"},
+ {on:["n-nem","n-panel","e8"],t:"The rule joins the playbook. After 1.5 s the same road replays, and this time the playbook includes the new rule.",f:"components/Panel.tsx · Session.playbook"}
+];
+let i=0;
+function show(){const s=steps[i];svg.classList.add("dim");svg.querySelectorAll(".node,.edge").forEach(g=>g.classList.toggle("on",s.on.includes(g.id)));$("stepText").textContent=(i+1)+". "+s.t;$("stepFile").textContent=s.f;$("count").textContent=(i+1)+" / "+steps.length}
+$("next").onclick=()=>{i=(i+1)%steps.length;show()};$("prev").onclick=()=>{i=(i-1+steps.length)%steps.length;show()};show();
+</script>
+</body>
+</html>

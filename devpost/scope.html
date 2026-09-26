@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Scope: Go Frog Go</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Inter:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#f6f4ee; --panel:#ffffff; --ink:#1d1d1f; --muted:#5f6368; --line:#d9d4c7;
+  --road:#3a3a3f; --grass:#6fbf4a; --s1:#1f8fff; --s2:#b04ce0; --warn:#f2a900; --bad:#e2463c; --good:#2e9e5b;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#131316; --panel:#1c1c21; --ink:#ececf1; --muted:#a2a2ad; --line:#33333b;
+    --road:#2a2a30; --grass:#4f8f35; --s1:#4aa8ff; --s2:#c77ef0; --warn:#ffc233; --bad:#ff6b61; --good:#4cc27e;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#131316; --panel:#1c1c21; --ink:#ececf1; --muted:#a2a2ad; --line:#33333b;
+  --road:#2a2a30; --grass:#4f8f35; --s1:#4aa8ff; --s2:#c77ef0; --warn:#ffc233; --bad:#ff6b61; --good:#4cc27e;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 Inter,system-ui,sans-serif}
+main{max-width:860px;margin:0 auto;padding:32px 16px 64px}
+.pix{font-family:"Press Start 2P",ui-monospace,monospace;letter-spacing:.02em}
+h1{font-size:clamp(18px,4vw,26px);line-height:1.4;margin:8px 0 12px}
+h2{font-size:13px;margin:40px 0 12px;color:var(--muted)}
+.tag{display:inline-block;font-size:10px;padding:6px 8px;border:2px solid var(--ink);background:var(--warn);color:#1d1d1f}
+.lede{font-size:18px;color:var(--muted);margin:0}
+.card{background:var(--panel);border:2px solid var(--line);padding:18px 20px;margin:12px 0}
+.kernel{border-color:var(--ink);box-shadow:6px 6px 0 var(--ink)}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media (max-width:640px){.two{grid-template-columns:1fr}}
+.dot{display:inline-block;width:10px;height:10px;margin-right:8px;vertical-align:middle}
+svg{width:100%;height:auto;display:block}
+svg text{font-family:Inter,system-ui,sans-serif;fill:var(--ink)}
+.stepper{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px}
+button{font:inherit;font-size:11px;padding:8px 12px;border:2px solid var(--ink);background:var(--panel);color:var(--ink);cursor:pointer}
+button:hover{background:var(--ink);color:var(--bg)}
+.stepText{min-height:3.2em;margin:10px 0 0;color:var(--ink)}
+.hl{outline:3px solid var(--warn);outline-offset:2px}
+details{background:var(--panel);border:2px solid var(--line);margin:10px 0}
+summary{cursor:pointer;padding:14px 18px;font-weight:600;list-style:none}
+summary::-webkit-details-marker{display:none}
+summary::before{content:"▸ ";color:var(--muted)}
+details[open] summary::before{content:"▾ "}
+details ul{margin:0;padding:0 18px 16px 38px}
+details li{margin:6px 0}
+.now summary{border-left:8px solid var(--good)}
+.later summary{border-left:8px solid var(--warn)}
+.cut summary{border-left:8px solid var(--bad)}
+.why{color:var(--muted)}
+blockquote{margin:0;padding-left:14px;border-left:4px solid var(--s2);color:var(--muted)}
+footer{margin-top:48px;color:var(--muted);font-size:13px}
+.road{height:24px;background:repeating-linear-gradient(90deg,var(--road) 0 28px,var(--road) 28px 40px);position:relative;margin:24px 0 0;border-top:4px solid var(--grass);border-bottom:4px solid var(--grass)}
+.road::after{content:"";position:absolute;left:0;right:0;top:10px;height:4px;background:repeating-linear-gradient(90deg,#f2e6a0 0 16px,transparent 16px 32px)}
+</style>
+</head>
+<body>
+<main>
+  <span class="tag pix">SCOPE · APPROVED</span>
+  <h1 class="pix">Go Frog Go</h1>
+  <p class="lede">An endless top-down pixel-art road-crossing game, played by a fast decision model with a slow LLM coaching it.</p>
+  <div class="road" aria-hidden="true"></div>
+
+  <h2 class="pix">THE KERNEL</h2>
+  <div class="card kernel">
+    You can watch System 2 teach System 1 from nothing. <strong style="color:var(--s1)">Jev</strong> makes every hop, starting with one instruction: "jump forward." After each death, <strong style="color:var(--s2)">Nemotron</strong> writes a lesson, and Jev plays the next run with the whole playbook. <span style="color:var(--muted)">(Revised in PRD: no mid-run takeover.)</span>
+  </div>
+
+  <h2 class="pix">HOW ONE RUN FLOWS</h2>
+  <div class="card">
+    <svg id="loop" viewBox="0 0 760 360" role="img" aria-label="Game loop: game state and playbook go to Jev, which makes every hop. On a death, Nemotron writes a lesson into the playbook, which feeds Jev's criteria.">
+      <defs>
+        <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--muted)"/></marker>
+      </defs>
+      <g id="n-state"><rect x="20" y="40" width="150" height="70" fill="var(--panel)" stroke="var(--ink)" stroke-width="2"/><text x="95" y="70" text-anchor="middle" font-weight="600">Game state</text><text x="95" y="92" text-anchor="middle" font-size="12" fill="var(--muted)">lanes, cars, playbook</text></g>
+      <g id="n-clm"><rect x="250" y="40" width="170" height="70" fill="var(--panel)" stroke="var(--s1)" stroke-width="3"/><text x="335" y="68" text-anchor="middle" font-weight="600">Jev · System 1</text><text x="335" y="90" text-anchor="middle" font-size="12" fill="var(--muted)">Choice + confidence</text></g>
+      <g id="n-hop"><rect x="560" y="40" width="170" height="70" fill="var(--panel)" stroke="var(--good)" stroke-width="3"/><text x="645" y="70" text-anchor="middle" font-weight="600">Hop</text><text x="645" y="92" text-anchor="middle" font-size="12" fill="var(--muted)">fwd · left · right · back · wait</text></g>
+      
+      <g id="n-death"><rect x="560" y="270" width="170" height="70" fill="var(--panel)" stroke="var(--bad)" stroke-width="3"/><text x="645" y="300" text-anchor="middle" font-weight="600">Hit by a car</text><text x="645" y="322" text-anchor="middle" font-size="12" fill="var(--muted)">run ends, distance logged</text></g>
+      <g id="n-lesson"><rect x="250" y="270" width="210" height="70" fill="var(--panel)" stroke="var(--s2)" stroke-width="3"/><text x="355" y="298" text-anchor="middle" font-weight="600">Nemotron writes a lesson</text><text x="355" y="320" text-anchor="middle" font-size="12" fill="var(--muted)">added to the playbook</text></g>
+      <path d="M170 75 H245" stroke="var(--muted)" stroke-width="2" marker-end="url(#ar)" fill="none"/>
+      <path d="M420 75 H555" stroke="var(--muted)" stroke-width="2" marker-end="url(#ar)" fill="none"/><text x="488" y="66" text-anchor="middle" font-size="12" fill="var(--good)">every move</text>
+      
+      
+      <path d="M680 110 C720 150 720 220 675 268" stroke="var(--muted)" stroke-width="2" stroke-dasharray="5 4" marker-end="url(#ar)" fill="none"/><text x="702" y="195" text-anchor="end" font-size="12" fill="var(--bad)">sometimes</text>
+      <path d="M612 42 C600 10 150 10 110 38" stroke="var(--muted)" stroke-width="2" marker-end="url(#ar)" fill="none"/><text x="360" y="22" text-anchor="middle" font-size="12" fill="var(--muted)">next beat</text>
+      <path d="M560 305 H465" stroke="var(--muted)" stroke-width="2" marker-end="url(#ar)" fill="none"/>
+      <path d="M300 270 L310 115" stroke="var(--s2)" stroke-width="2" stroke-dasharray="6 4" marker-end="url(#ar)" fill="none"/><text x="230" y="200" font-size="12" fill="var(--s2)">next run's criteria</text>
+    </svg>
+    <div class="stepper">
+      <button id="prev">◀ Back</button><button id="next">Next ▶</button><span id="count" class="why"></span>
+    </div>
+    <p class="stepText" id="stepText"></p>
+  </div>
+
+  <div class="two">
+    <div class="card"><h2 class="pix" style="margin-top:0">WHO IT'S FOR</h2>Developers who saw Jev (or models like it) and want to see what a "System One" model is good for once a reasoning LLM is directing it. Also Matt, who wants to learn exactly that.</div>
+    <div class="card"><h2 class="pix" style="margin-top:0">WHY IT MATTERS</h2><blockquote>"That's my whole point."</blockquote><p style="margin:10px 0 0">Matt came to learn Jev and how it works with an LLM controlling it. It runs on Jev through Vercel AI Gateway.</p></div>
+  </div>
+
+  <h2 class="pix">WHAT "WORKING" LOOKS LIKE</h2>
+  <div class="card">A few runs back to back. Run 1 hops straight into the first car. A lesson appears. Run 2 waits at that same kind of lane and gets farther. A later run goes much farther.<br><br><strong>The "oh, that's cool" beat:</strong> the frog surviving the exact thing that killed it last time, because of a lesson you watched get written.</div>
+
+  <h2 class="pix">LOOK &amp; FEEL</h2>
+  <div class="card">Crossy Road's endless lanes and stepped hopping, with Frogger's close calls. Top-down pixel art and arcade nostalgia. Sparked by a video of Jev playing Super Mario Bros. and Smash in real time. Original name and sprites, nothing borrowed. <a href="https://www.crossyroad.com/" style="color:var(--s1)">crossyroad.com</a></div>
+
+  <h2 class="pix">BOUNDARY</h2>
+  <details class="now" open><summary>Now: the proof of concept</summary><ul>
+    <li>One endless level: road lanes, cars at varied speeds</li>
+    <li>Top-down pixel-art rendering in the browser</li>
+    <li>Jev as System 1 through a swappable adapter (one file to swap)</li>
+    <li>Playbook starts as "jump forward"</li>
+    <li>Nemotron on Nebius Token Factory as System 2: one lesson after each death, never a mid-run move</li>
+    <li>On screen: playbook, confidence readout, distance per run</li>
+  </ul></details>
+  <details class="later"><summary>Later</summary><ul>
+    <li>Race Jev against another System One model</li>
+    <li>Rivers, logs and trains</li>
+    <li>Hosted demo URL, open-source license and polish for Nebius (due Oct 30, after Basics closes Oct 26)</li>
+    <li>Human vs. AI mode</li>
+    <li>Sound</li>
+  </ul></details>
+  <details class="cut"><summary>Cut, and why</summary><ul>
+    <li>Coach taking over mid-run <span class="why">(would rescue early runs and hide the learning-from-nothing story)</span></li>
+    <li>Real Mario, Smash, Crossy Road or Tetris assets or names <span class="why">(third-party IP, which both hackathons forbid)</span></li>
+    <li>Raspberry Pi, LEDs and RFID <span class="why">(LEDs alone don't sense anything, and the RFID ideas didn't land)</span></li>
+    <li>The earlier code-scanner idea <span class="why">(Matt wanted something fun to watch)</span></li>
+    <li>Reading game state from pixels <span class="why">(the game hands Jev its state directly)</span></li>
+  </ul></details>
+
+  <footer>Companion to <code>devpost/scope.md</code>, which is the canonical version.</footer>
+</main>
+<script>
+const steps=[
+  ["n-state","Each beat, the game packages its state: which lanes have cars, how fast, where the frog is, and the playbook. Run 1's playbook is one line: \"jump forward.\""],
+  ["n-clm","Jev answers one Choice question: which hop? It returns an answer and a confidence. It makes every move."],
+  ["n-hop","The hop happens. With only \"jump forward,\" run 1 walks straight into traffic."],
+  ["n-death","It gets hit. The run ends and the distance is logged."],
+  ["n-lesson","Nemotron reads the last few moves and writes one short lesson. It joins the playbook, and the next run plays with it. The coach never moves the frog."]
+];
+let i=0;
+function show(){
+  steps.forEach(([id])=>document.getElementById(id).querySelector("rect").classList.remove("hl"));
+  document.getElementById(steps[i][0]).querySelector("rect").classList.add("hl");
+  document.getElementById("stepText").textContent=steps[i][1];
+  document.getElementById("count").textContent=(i+1)+" / "+steps.length;
+}
+document.getElementById("next").onclick=()=>{i=(i+1)%steps.length;show()};
+document.getElementById("prev").onclick=()=>{i=(i-1+steps.length)%steps.length;show()};
+show();
+</script>
+</body>
+</html>
