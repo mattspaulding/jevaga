@@ -49,7 +49,7 @@ Build mode: fast (chosen 2026-09-25)
   Learner check: Switch to You play and fly a few runs. Is it fun, and is the pace right?
   Commit: `Jevaga: the shooter, flown with the keyboard`
 
-- [ ] **5. Jev flies Jevaga, and a plan changes its moves**
+- [x] **5. Jev flies Jevaga, and a plan changes its moves**
   Becomes usable: Jev mode flies the ship in real time with the JEV window showing each move (left, right, stay, fire), confidence, four probabilities and answer time. `pnpm plan-test` shows whether a written plan changes Jev's choice in frozen fights.
   Why now: The risk: does Jev read the fight well enough to dodge and aim, and does a plan steer it? Checked before the strategist is built.
   PRD ref: `prd.md > Jev flies (System 1)`
@@ -128,3 +128,4 @@ Activity mode:
 - The coach edits the playbook instead of appending to it: one add/replace/remove per run, at most 4 rules above a fixed "Otherwise, jump forward." — Matt picked option 1 after the playbook grew to 10 contradictory rules. Asking Nemotron to rewrite the whole list failed (it rewrote every rule and invented its own vocabulary), so the code applies a single edit. Seed 13 then climbed 2 → 7 → 16 → 32 → 32 before later edits regressed it.
 - Switched from the frog game to Jevaga, a Galaga-style shooter, with Nemotron as a live strategist instead of a between-runs teacher — Matt, 2026-09-26: Jev only ever waited or hopped forward, which wasn't interesting to watch, and learning between runs was too noisy (the same playbook scored 7 to 32). Slices 1–3 stay as history; slices 4–8 are rewritten for the shooter. Scope, PRD and spec rewritten and approved ("Jevaga, you derive the sprites, go build it").
 - Slice 4 also brought in the fight descriptions for Jev and the four-move/plan interface from slice 5, and retired the frog coach (lesson route, coach memory, lesson test, simulator) from slice 6: the old files no longer compiled against the shooter, and keeping the project building mattered more than slice boundaries. Slice 5 adds the plan test and a new simulator; slice 6 adds the live planner.
+- The plan test's third check measures how far a plan shifts Jev rather than requiring a plan to override survival — with "ignore bullets and keep firing", Jev's chance of firing under a bullet rose from 0.04 to 0.24 but it still dodged, because its fixed instructions put staying alive first. That's the behavior the game wants.
