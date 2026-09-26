@@ -1,4 +1,22 @@
-import { BAT_DROP, batCommitAge, batZigX, COLS, COMMIT_ROW, CY_GLOW, enemyPos, HOVER_ROW, ROWS, SHIP_ROW, type Dive, type Enemy, type World } from "./world";
+import {
+  BAT_DROP,
+  batCommitAge,
+  batZigX,
+  COLS,
+  COMMIT_ROW,
+  CY_GLOW,
+  enemyPos,
+  ENTRY_LEAD,
+  ENTRY_PATHS,
+  ENTRY_SPEED,
+  entryAt,
+  HOVER_ROW,
+  ROWS,
+  SHIP_ROW,
+  type Dive,
+  type Enemy,
+  type World,
+} from "./world";
 import { BODY, drawSprite, type SpriteName } from "./sprites";
 
 export const TILE = 16;
@@ -59,7 +77,7 @@ function arrowHead(ctx: CanvasRenderingContext2D, x: number, y: number, dx: numb
 function pathLine(ctx: CanvasRenderingContext2D, e: Enemy, d: Dive, t: number) {
   const color = BODY.enemy[e.kind];
   const column = (from: number, alpha: number) => dotted(ctx, [{ x: d.col, y: from }, { x: d.col, y: SHIP_ROW }], color, alpha, 2);
-  if (d.phase === "home") return;
+  if (d.phase === "home" || d.phase === "enter" || d.phase === "settle") return;
   if (e.kind === 2) {
     column(d.phase === "fall" ? d.y + 0.6 : d.y, 0.7); // Drone: the column it will fall down
     return;
@@ -102,6 +120,36 @@ function pathLine(ctx: CanvasRenderingContext2D, e: Enemy, d: Dive, t: number) {
   dotted(ctx, pts, color, 0.75);
 }
 
+// Each fly-in group's path, from 1 s before its first enemy appears until its
+// last one has flown it, drawn ahead of the last enemy in the file.
+function entryLines(ctx: CanvasRenderingContext2D, world: World) {
+  const tail = new Map<number, Enemy>();
+  for (const e of world.enemies) {
+    const d = e.diving;
+    if (!e.alive || d?.phase !== "enter") continue;
+    const last = tail.get(d.path);
+    if (!last || d.since > last.diving!.since) tail.set(d.path, e);
+  }
+  for (const [path, e] of tail) {
+    const d = e.diving!;
+    const first = Math.min(...world.enemies.filter((o) => o.alive && o.diving?.phase === "enter" && o.diving.path === path).map((o) => o.diving!.since));
+    if (world.t < first - ENTRY_LEAD) continue;
+    const along = Math.max(0, (world.t - d.since) * ENTRY_SPEED);
+    const pts = ENTRY_PATHS[path].filter((p) => p.at > along);
+    dotted(ctx, [entryAt(path, along), ...pts], BODY.enemy[e.kind], 0.55);
+  }
+}
+
+// A Cyclops hit once keeps its eye shut: a lid over the eye with a dark slit.
+function eyeShut(ctx: CanvasRenderingContext2D, cx: number, cy: number, dive: boolean) {
+  const x = Math.round(cx), y = Math.round(cy);
+  const top = dive ? 0 : -2;
+  ctx.fillStyle = BODY.enemy[0];
+  ctx.fillRect(x - 3, y + top, 6, dive ? 5 : 4);
+  ctx.fillStyle = "#1b1b28";
+  ctx.fillRect(x - 3, y + top + (dive ? 2 : 1), 6, 1);
+}
+
 // A Cyclops's eye glows before it fires: the eye fills with light, the pupil
 // goes white, and two rays reach out past its body. `amount` runs 0 to 1.
 function eyeGlow(ctx: CanvasRenderingContext2D, cx: number, cy: number, amount: number, dive: boolean) {
@@ -136,14 +184,18 @@ export function render(ctx: CanvasRenderingContext2D, world: World, view: View) 
   }
 
   const t = world.t;
+  entryLines(ctx, world);
   for (const e of world.enemies) if (e.alive && e.diving) pathLine(ctx, e, e.diving, t);
 
   const flap = Math.floor(t / FLAP_S) % 2 === 0 ? "a" : "b";
   for (const e of world.enemies) {
     if (!e.alive) continue;
     const p = enemyPos(e, t);
+    if (p.y < -1) continue; // still waiting to fly in
     const d = e.diving;
-    const inSlot = !d || d.phase === "rev" || d.phase === "flap" || d.phase === "open" || d.phase === "home";
+    // Flying in, it wears its dive pose while heading down and its formation pose while climbing.
+    const climbing = d?.phase === "enter" && entryAt(d.path, (t - d.since) * ENTRY_SPEED - 0.3).y > p.y;
+    const inSlot = !d || d.phase === "rev" || d.phase === "flap" || d.phase === "open" || d.phase === "home" || d.phase === "settle" || climbing;
     let frame = flap;
     let jitter = 0;
     if (d?.phase === "rev") {
@@ -151,8 +203,10 @@ export function render(ctx: CanvasRenderingContext2D, world: World, view: View) 
       jitter = Math.floor(t / REV_S) % 2 === 0 ? -1 : 1;
     }
     const name = (inSlot ? `enemy${e.kind}-${frame}` : `dive${e.kind}`) as SpriteName;
-    drawSprite(ctx, name, px(p.x) + jitter, px(p.y), BODY.enemy[e.kind]);
-    if (e.kind === 0 && !d && e.charge !== null) eyeGlow(ctx, px(p.x), px(p.y), 1 - Math.max(0, e.charge - t) / CY_GLOW, false);
+    const flash = t - e.hurt < 0.12; // a hit that didn't kill flashes white
+    drawSprite(ctx, name, px(p.x) + jitter, px(p.y), flash ? "#ffffff" : BODY.enemy[e.kind]);
+    if (e.kind === 0 && e.hp === 1 && !flash) eyeShut(ctx, px(p.x), px(p.y), !inSlot);
+    if (e.kind === 0 && e.charge !== null) eyeGlow(ctx, px(p.x), px(p.y), 1 - Math.max(0, e.charge - t) / CY_GLOW, !inSlot);
     if (e.kind === 0 && d?.phase === "park") {
       const into = (t - d.since) % CY_GLOW;
       eyeGlow(ctx, px(p.x), px(p.y), into / CY_GLOW, true);

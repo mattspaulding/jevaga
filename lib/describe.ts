@@ -9,9 +9,13 @@ import {
   DRONE_REV,
   DRONE_SLIDE,
   drift,
+  ENTRY_FIRE_ROW,
+  ENTRY_PATHS,
+  ENTRY_SIDE,
   enemyPos,
   gunReadyIn,
   HOVER_ROW,
+  arriving,
   KIND_NAME,
   landingX,
   movePath,
@@ -49,7 +53,8 @@ function incoming(world: World, move: Move): string {
 function above(world: World, x: number): string {
   const t = targetAbove(world, x);
   if (!t) return "no enemy above";
-  return `${t.diving ? "a diving" : "a"} ${KIND_NAME[t.kind]} ${t.rowsUp.toFixed(0)} rows up, a shot reaches it in ${s1(t.seconds)}`;
+  const hits = t.kind !== 0 ? "" : t.hp === 1 ? ", hit once, one more shot kills it" : ", takes two hits";
+  return `${t.diving ? "a diving" : "a"} ${KIND_NAME[t.kind]} ${t.rowsUp.toFixed(0)} rows up${hits}, a shot reaches it in ${s1(t.seconds)}`;
 }
 
 // Your answer lands about a quarter-second after you're asked, so a glide
@@ -100,8 +105,35 @@ function diveLine(world: World, e: Enemy): string | null {
     case "drop":
       return `a Cyclops dropping straight down ${col}, ${rowsUp(d.y)}, reaching your row in ${s1((SHIP_ROW - d.y) / CY_DROP)}`;
     case "home":
+    case "enter":
+    case "settle":
       return null;
   }
+}
+
+const PLURAL = ["Cyclopes", "Bats", "Drones"] as const;
+const lowest = ENTRY_PATHS.map((p) => p.reduce((a, b) => (b.y > a.y ? b : a)));
+
+// The fly-in, one group at a time: who, from where, how low, and whether it shoots.
+function arrivingLine(world: World): string | null {
+  const groups = new Map<number, Enemy[]>();
+  for (const e of world.enemies) if (arriving(e)) groups.set(e.diving!.path, [...(groups.get(e.diving!.path) ?? []), e]);
+  const parts = [...groups.entries()].flatMap(([path, es]) => {
+    const kind = es[0].kind;
+    const entering = es.filter((e) => e.diving!.phase === "enter");
+    if (!entering.length) return [`${es.length} ${PLURAL[kind]} climbing to their slots`];
+    const first = Math.min(...entering.map((e) => e.diving!.since));
+    const low = lowest[path];
+    const how = `${entering.length} ${PLURAL[kind]} swooping in from the ${ENTRY_SIDE[path]}, lowest at row ${low.y.toFixed(0)} near ${at(low.x)}`;
+    const fire =
+      world.wave < 2 || kind === 2
+        ? ""
+        : kind === 1
+          ? `, each dropping a bullet as it passes row ${ENTRY_FIRE_ROW} on the way down`
+          : ", some with eyes glowing to fire an aimed shot on the way";
+    return [first > world.t ? `${how}${fire}, starting in ${s1(first - world.t)}` : `${how}${fire}`];
+  });
+  return parts.length ? `Arriving: ${parts.join("; ")}. Nothing dives until the formation is in place.` : null;
 }
 
 export function describeFight(world: World): string {
@@ -116,13 +148,15 @@ export function describeFight(world: World): string {
     `Coming at your row, counting the way there: ${spots.map(([name, m]) => `${name} (${at(landingX(world, m))}): ${incoming(world, m)}`).join("; ")}.`,
     `Above you: ${above(world, x)}.`,
   ];
+  const arrival = arrivingLine(world);
+  if (arrival) lines.push(arrival);
   const dives = world.enemies.filter((e) => e.alive && e.diving).flatMap((e) => diveLine(world, e) ?? []);
   lines.push(dives.length ? `Diving: ${dives.join("; ")}.` : "Diving: none right now.");
-  const glowing = world.enemies.filter((e) => e.alive && !e.diving && e.charge !== null);
+  const glowing = world.enemies.filter((e) => e.alive && e.charge !== null);
   if (glowing.length)
     lines.push(
-      `Formation shots coming: ${glowing
-        .map((e) => `a Cyclops at ${at(enemyPos(e, world.t).x)}, eye glowing, shoots at where you are then in ${s1(Math.max(0, e.charge! - world.t))}`)
+      `Cyclops eyes glowing: ${glowing
+        .map((e) => `a Cyclops ${e.diving ? "flying in" : "in the formation"} at ${at(enemyPos(e, world.t).x)}, eye glowing, shoots at where you are then in ${s1(Math.max(0, e.charge! - world.t))}`)
         .join("; ")}.`,
     );
   const left = world.enemies.filter((e) => e.alive).length;

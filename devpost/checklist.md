@@ -119,7 +119,7 @@ Build mode: fast (chosen 2026-09-25)
   Learner check: Play a wave in You mode. Can you tell the three enemies apart by how they attack, and does every attack show itself before it lands?
   Commit: `Each enemy kind dives its own way`
 
-- [ ] **12. Every wave flies in, and the Cyclops takes two hits**
+- [x] **12. Every wave flies in, and the Cyclops takes two hits**
   Becomes usable: each wave starts empty; three groups of 7 swoop in single file along paths drawn 1 s ahead, dip to row 9 and climb to their slots; from wave 2 Bats and Cyclopes fire on the way in; dives and volleys wait until the formation is in place. A Cyclops's first hit shuts its eye and the second kills it. Jev reads the fly-in and "hit once, one more shot kills it".
   Why now: It changes the first seconds of every run and every replay, so it goes in before carriers, the saved learning run and the video. Matt, 2026-09-26.
   PRD ref: `prd.md > The fight`
@@ -221,3 +221,5 @@ Activity mode:
 - An enemy design pass was added before the saved learning run and the video (Matt, 2026-09-26: "they all do the exact same thing... what makes it fun is that all the different enemies have their own different attack patterns"). Researched Galaga and its series, fact-checked, and settled on the "Jevaga enemy design" canvas with an Enemy Library in a playful sci-fi tone; the result is `devpost/enemy-design.md`. Slices 11 to 14 build it; honest failures and offline mode move to slice 15.
 - Slice 11: the dive code stayed in `lib/game/world.ts` instead of a new `enemies.ts`, because the dives need the world's constants at load time and a split would be a circular import. Prediction is now a copy of the fight stepped forward with no new launches, so it names what hits ("Drone in 0.6 s", "Cyclops shot in 0.4 s") and matched the real fight on 47 of 47 test fights. One attack at a time for now (the wave table in slice 14 raises it). Dumb Jev now lasts 10 to 35 s on seed 5 and dies mostly to Cyclops shots: half the formation volleys are aimed at the ship. A reflex that moves when anything is under 1 s away survives a median 38 s, so the aimed shots are learnable, and they're what the coach has to teach first.
 - A fly-in at the start of every wave and a two-hit Cyclops were added as slice 12, ahead of carriers (Matt, 2026-09-26: "they come in from the top and... formation on like an initial attack", and "stronger ones that took more than one hit"). The earlier plan had the formation already in place on wave 1, the fly-in only from wave 3 and on the cut list, and one-hit Cyclopes. Carriers, waves, the Enemy Library and honest failures move to slices 13 to 16.
+- Slice 12: the fly-in takes 7.9 s from wave start to the last enemy in its slot, and the fight starts 1 s later. Building it turned up a scoring bug from slice 11: an enemy was marked dead before its points were counted, so every diving kill paid formation points. Fixed; a diving Cyclops now pays 400.
+

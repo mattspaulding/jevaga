@@ -9,6 +9,7 @@ import {
   act,
   advance,
   batZigX,
+  arriving,
   COMMIT_ROW,
   DECISION_SECONDS,
   drift,
@@ -43,24 +44,101 @@ function check(name: string, ok: boolean) {
 const near = (a: number, b: number, eps = 0.05) => Math.abs(a - b) < eps;
 const batBullet = (x: number, y: number): Bullet => ({ x, y, vx: 0, vy: 7, from: 1 });
 const find = (w: World, kind: Kind, col: number) => w.enemies.find((e) => e.kind === kind && e.slot.col === col)!;
-const attacking = (w: World) => w.enemies.filter((e) => e.alive && e.diving && e.diving.phase !== "home").length;
+const attacking = (w: World) => w.enemies.filter((e) => e.alive && e.diving && !["home", "enter", "settle"].includes(e.diving.phase)).length;
 // Steps until `done` is true, the ship is hit, or `seconds` pass.
 function until(w: World, done: () => boolean, seconds = 10) {
   for (let i = 0; i < seconds / 0.02 && !done(); i++) if (stepN(w, 1)) return "hit";
   return null;
 }
-// A fight with nothing scheduled, so a check sees only what it sets up.
+// A fight with nothing scheduled and the formation already in place, so a check sees only what it sets up.
 function quiet(seed = 1): World {
   const w = newWorld(seed);
   w.nextDive = w.nextVolley = 1e9;
+  for (const e of w.enemies) e.diving = null;
   return w;
+}
+// Keeps a fight going after a hit, so a check can watch a long stretch of it.
+function immortal(w: World) {
+  if (w.alive) return;
+  w.alive = true;
+  w.hitBy = null;
+  w.bullets = w.bullets.filter((b) => b.y < SHIP_ROW - 1);
 }
 
 // Formation.
 {
-  const w = newWorld(1);
+  const w = quiet();
   check("21 enemies in 3 rows of 7", w.enemies.length === 21 && new Set(w.enemies.map((e) => e.slot.row)).size === 3);
   check("the formation drifts side to side", near(enemyPos(w.enemies[0], 0).x, 1) && near(enemyPos(w.enemies[0], 2.6).x, 1 + drift(2.6)));
+}
+
+// The fly-in: every wave starts empty and swoops in, and nothing dives or volleys until it's in place.
+{
+  const w = newWorld(2);
+  check("a new fight starts with all 21 enemies waiting to fly in, off the top", w.enemies.every((e) => e.diving?.phase === "enter" && enemyPos(e, 0).y < -1));
+  let deepest = 0;
+  let early = 0;
+  const shown = new Set<number>();
+  const hit = until(w, () => {
+    for (const e of w.enemies) if (e.diving?.phase === "enter") deepest = Math.max(deepest, e.diving.y);
+    if (w.enemies.some(arriving) && (w.bullets.length || attacking(w))) early++;
+    for (const e of w.enemies) if (e.diving?.phase === "enter" && e.diving.y > -1) shown.add(e.id);
+    return !w.enemies.some(arriving);
+  }, 15);
+  check(`every enemy flies in and reaches its slot, in ${w.t.toFixed(1)} s`, hit === null && shown.size === 21 && w.enemies.every((e) => !e.diving && near(enemyPos(e, w.t).y, e.slot.row, 1e-9)) && w.t < 10);
+  check(`the fly-in dips no lower than row 9 (deepest ${deepest.toFixed(2)})`, deepest <= 9.001 && deepest > 8.5);
+  check("in wave 1 nobody fires on the way in, and nothing dives or volleys until the formation is in place", early === 0);
+  const settled = w.t;
+  until(w, () => w.bullets.length > 0 || attacking(w) > 0);
+  check(`then the fight starts a second later (${(w.t - settled).toFixed(2)} s)`, w.t - settled >= 0.98 && w.t - settled < 1.6);
+}
+{
+  // Clear wave 1 by hand; wave 2 flies in firing.
+  const w = quiet();
+  for (const e of w.enemies) e.alive = false;
+  stepN(w, 1);
+  check("clearing a wave starts the next one flying in", w.wave === 2 && w.enemies.every((e) => e.diving?.phase === "enter"));
+  const shots = [0, 0, 0];
+  const seen = new Set<Bullet>();
+  for (let i = 0; i < 15 / 0.02 && w.enemies.some(arriving); i++) {
+    stepN(w, 1);
+    for (const b of w.bullets)
+      if (!seen.has(b)) {
+        seen.add(b);
+        shots[b.from]++;
+      }
+    immortal(w);
+  }
+  check(`from wave 2, every Bat drops a bullet on the way in (${shots[1]} of 7) and every other Cyclops fires an aimed shot (${shots[0]} of 4)`, shots[1] === 7 && shots[0] === 4);
+}
+
+// A Cyclops takes two hits.
+{
+  const w = quiet();
+  const c = find(w, 0, 4);
+  for (const e of w.enemies) if (e.slot.col === 4 && e.kind !== 0) e.alive = false; // clear its column
+  // A shot just under it (the formation drifts, so a shot from the ship could miss).
+  const shoot = () => {
+    const p = enemyPos(c, w.t);
+    w.shots.push({ x: p.x, y: p.y + 0.3 });
+    stepN(w, 1);
+  };
+  shoot();
+  w.ship.x = enemyPos(c, w.t).x;
+  check("the first hit on a Cyclops doesn't kill it (its eye shuts)", c.alive && c.hp === 1 && w.score === 0);
+  check('Jev reads it as "hit once, one more shot kills it"', /hit once, one more shot kills it/.test(describeMoves(w).fire));
+  shoot();
+  check("the second kills it: 150 in formation", !c.alive && w.score === 150);
+  const v = quiet();
+  const d = find(v, 0, 2);
+  startDive(v, d);
+  until(v, () => d.diving?.phase === "slide");
+  for (let i = 0; i < 2; i++) {
+    const p = enemyPos(d, v.t);
+    v.shots.push({ x: p.x, y: p.y + 0.3 });
+    stepN(v, 1);
+  }
+  check("a diving Cyclops is worth 400", !d.alive && v.score === 400);
 }
 
 // Continuous steering.
@@ -325,7 +403,7 @@ function quiet(seed = 1): World {
   let total = 0;
   const names = new Set<string>();
   for (let seed = 1; seed <= 80; seed++) {
-    const lead = 1 + (seed % 10) * 0.6;
+    const lead = 1 + (seed % 10) * 2; // from the fly-in into the dives
     const w = newWorld(seed);
     w.ship.x = seed % 9;
     advance(w, lead);
@@ -385,7 +463,7 @@ function quiet(seed = 1): World {
   const plan: [number, "left" | "right" | "stay" | "fire"][] = [
     [40, "left"], [14, "fire"], [30, "right"], [14, "fire"], [25, "stay"], [14, "fire"], [60, "left"], [14, "fire"],
   ];
-  stepN(w, 150); // 3 s in, a dive and volleys already under way
+  stepN(w, 700); // 14 s in: after the fly-in, a dive and volleys under way
   const copy = structuredClone(w);
   check("a world is plain data (the copy equals the original)", JSON.stringify(copy) === JSON.stringify(w));
   for (const world of [w, copy])

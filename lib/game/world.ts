@@ -49,7 +49,19 @@ export const CY_GLOW = 0.8; // the eye glows this long before every aimed shot
 const CY_SHOTS = 2;
 export const CY_DROP = 4.5;
 const AIMED_SPEED = 6;
-const HOME_SPEED = 5; // a diver that missed flies back to its slot from the top
+const HOME_SPEED = 5; // a diver that missed flies back to its slot from the top, and a new enemy flies to its slot after the fly-in
+
+// The fly-in (enemy-design.md, section 3): every wave starts empty, and three
+// groups of 7 swoop in single file along fixed paths, dip to row 9 and climb
+// to their slots. Nothing dives or volleys until they're all in place.
+export const ENTRY_SPEED = 7; // cells per second along the path
+const ENTRY_SPACING = 0.18; // seconds between enemies in one file
+const ENTRY_GROUP_GAP = 1.2; // seconds between groups
+export const ENTRY_LEAD = 1; // a group's path is drawn this long before its first enemy appears
+export const ENTRY_FIRE_ROW = 5; // from wave 2, an entering Bat drops a bullet here on the way down
+const ENTRY_GLOW_ROW = 3; // and an entering Cyclops starts its eye glow here
+const ENTRY_REST = 1; // after the last enemy reaches its slot, dives and volleys wait this long
+const CY_HP = 2; // a Cyclops takes two hits
 const DIVE_WEIGHT = [1, 2, 3]; // Cyclops, Bat, Drone: Drones dive most often
 const AT_ONCE = 1; // attacks under way at once
 const DIVE_GAP = 0.8; // the next dive waits at least this long after an attack ends
@@ -61,7 +73,8 @@ export type Kind = 0 | 1 | 2; // Cyclops (row 1), Bat (row 2), Drone (row 3)
 export const KIND_NAME = ["Cyclops", "Bat", "Drone"] as const;
 
 // rev/flap/open: still in its slot, winding up. home: missed, flying back.
-export type Phase = "rev" | "slide" | "fall" | "flap" | "zig" | "commit" | "open" | "loop" | "park" | "drop" | "home";
+// enter: flying in along a fly-in path. settle: from the end of that path to its slot.
+export type Phase = "rev" | "slide" | "fall" | "flap" | "zig" | "commit" | "open" | "loop" | "park" | "drop" | "home" | "enter" | "settle";
 export type Dive = {
   phase: Phase;
   since: number; // when this phase began
@@ -73,8 +86,18 @@ export type Dive = {
   dir: 1 | -1; // Bat: its first zig; Cyclops: which way it loops
   vx: number; // Bat: sideways speed once committed
   fired: number;
+  path: number; // enter: which fly-in path (ENTRY_PATHS); -1 otherwise
 };
-export type Enemy = { id: number; slot: { col: number; row: number }; kind: Kind; alive: boolean; diving: Dive | null; charge: number | null }; // charge: a Cyclops in formation fires an aimed shot at this time
+export type Enemy = {
+  id: number;
+  slot: { col: number; row: number };
+  kind: Kind;
+  alive: boolean;
+  hp: number; // hits left: a Cyclops takes two
+  hurt: number; // when it last took a hit that didn't kill it, for the flash
+  diving: Dive | null;
+  charge: number | null; // a Cyclops fires an aimed shot at this time
+};
 export type Bullet = { x: number; y: number; vx: number; vy: number; from: Kind };
 export type Shot = { x: number; y: number };
 export type Pop = { x: number; y: number; kind: Kind; t: number }; // an enemy destroyed at (x, y) at time t
@@ -109,12 +132,87 @@ export type RunEvent = null | "hit";
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 
-// Formation: 3 rows of 7, drifting side to side by up to one column.
-function formation(): Enemy[] {
+// Fly-in paths, as waypoints in cells: in from the top left, the top right
+// (its mirror) and the top middle, down to row 9, looping back up. Each is
+// sampled once into a smooth line an enemy follows at ENTRY_SPEED.
+const ENTRY_WAYPOINTS: [number, number][][] = (() => {
+  const left: [number, number][] = [[-1.5, -1.5], [0.6, 1.2], [2.2, 4.4], [3.2, 7.4], [4.5, 8.9], [5.8, 8.2], [6.3, 6.6], [5.4, 5.4], [4, 5.5]];
+  const middle: [number, number][] = [[4, -1.5], [4, 1.4], [3.1, 4.4], [2.3, 7.2], [3.1, 8.8], [4.7, 8.6], [5.6, 7.3], [5.2, 5.8], [4, 5.4]];
+  return [left, left.map(([x, y]) => [COLS - 1 - x, y] as [number, number]), middle];
+})();
+export const ENTRY_SIDE = ["top left", "top right", "top middle"] as const;
+
+type Pt = { x: number; y: number; at: number }; // at: distance along the path
+function sample(way: [number, number][]): Pt[] {
+  const p = (i: number) => way[Math.max(0, Math.min(way.length - 1, i))];
+  const out: Pt[] = [];
+  for (let i = 0; i < way.length - 1; i++)
+    for (let k = 0; k < 10; k++) {
+      // Catmull-Rom through the waypoints
+      const u = k / 10;
+      const [a, b, c, d] = [p(i - 1), p(i), p(i + 1), p(i + 2)];
+      const f = (j: 0 | 1) => 0.5 * (2 * b[j] + (c[j] - a[j]) * u + (2 * a[j] - 5 * b[j] + 4 * c[j] - d[j]) * u * u + (3 * b[j] - a[j] - 3 * c[j] + d[j]) * u * u * u);
+      out.push({ x: f(0), y: f(1), at: 0 });
+    }
+  out.push({ x: way[way.length - 1][0], y: way[way.length - 1][1], at: 0 });
+  for (let i = 1; i < out.length; i++) out[i].at = out[i - 1].at + Math.hypot(out[i].x - out[i - 1].x, out[i].y - out[i - 1].y);
+  return out;
+}
+export const ENTRY_PATHS: Pt[][] = ENTRY_WAYPOINTS.map(sample);
+export const entryLength = (path: number) => ENTRY_PATHS[path][ENTRY_PATHS[path].length - 1].at;
+
+// Where an enemy is `along` cells into a fly-in path.
+export function entryAt(path: number, along: number): { x: number; y: number } {
+  const pts = ENTRY_PATHS[path];
+  if (along <= 0) return { x: pts[0].x, y: pts[0].y };
+  let lo = 0;
+  let hi = pts.length - 1;
+  if (along >= pts[hi].at) return { x: pts[hi].x, y: pts[hi].y };
+  while (hi - lo > 1) {
+    const mid = (lo + hi) >> 1;
+    if (pts[mid].at <= along) lo = mid;
+    else hi = mid;
+  }
+  const u = (along - pts[lo].at) / (pts[hi].at - pts[lo].at);
+  return { x: pts[lo].x + (pts[hi].x - pts[lo].x) * u, y: pts[lo].y + (pts[hi].y - pts[lo].y) * u };
+}
+
+// Which kind comes in along which path, in the order the groups come in.
+// Three patterns, one per wave in turn (Galaga has three).
+const ENTRY_PATTERNS: [Kind, number][][] = [
+  [[1, 0], [2, 1], [0, 2]], // Bats from the top left, Drones from the top right, Cyclopes from the top middle
+  [[2, 0], [0, 1], [1, 2]],
+  [[0, 0], [1, 1], [2, 2]],
+];
+export const entryPattern = (wave: number) => ENTRY_PATTERNS[(wave - 1) % ENTRY_PATTERNS.length];
+
+// A new wave: 3 rows of 7, each flying in along its group's path. Its first
+// enemy appears ENTRY_LEAD after the wave starts, so the path shows first.
+// From wave 2, every Bat and every other Cyclops fires on the way in
+// (fired 0 = still to fire).
+function formation(t: number, wave: number): Enemy[] {
   const out: Enemy[] = [];
   let id = 0;
   for (let row = 1; row <= 3; row++)
-    for (let col = 1; col <= 7; col++) out.push({ id: id++, slot: { col, row }, kind: (row - 1) as Kind, alive: true, diving: null, charge: null });
+    for (let col = 1; col <= 7; col++) {
+      const kind = (row - 1) as Kind;
+      const group = entryPattern(wave).findIndex(([k]) => k === kind);
+      const path = entryPattern(wave)[group][1];
+      const order = path === 1 ? 7 - col : col - 1; // the file fills the far slots first
+      const since = t + ENTRY_LEAD + group * ENTRY_GROUP_GAP + order * ENTRY_SPACING;
+      const fires = wave >= 2 && kind !== 2 && (kind === 1 || order % 2 === 0);
+      const start = entryAt(path, 0);
+      out.push({
+        id: id++,
+        slot: { col, row },
+        kind,
+        alive: true,
+        hp: kind === 0 ? CY_HP : 1,
+        hurt: -1,
+        charge: null,
+        diving: { phase: "enter", since, x: start.x, y: start.y, col: 0, x0: 0, y0: 0, dir: 1, vx: 0, fired: fires ? 0 : 1, path },
+      });
+    }
   return out;
 }
 export const drift = (t: number) => Math.sin(0.6 * t);
@@ -131,7 +229,7 @@ export function newWorld(seed: number): World {
     t: 0,
     steps: 0,
     ship: { x: 4, vx: 0, glideUntil: 0, reloadUntil: 0 },
-    enemies: formation(),
+    enemies: formation(0, 1),
     bullets: [],
     shots: [],
     pops: [],
@@ -157,7 +255,10 @@ export const resetRun = (world: World) => newWorld(world.seed);
 
 const bulletHits = (b: { x: number; y: number }, x: number) => Math.abs(b.x - x) < SHIP_HALF && Math.abs(b.y - SHIP_ROW) < 0.5;
 const diverHits = (d: { x: number; y: number }, x: number) => Math.abs(d.x - x) < 0.6 && Math.abs(d.y - SHIP_ROW) < 0.6;
-const attacking = (e: Enemy) => e.alive && !!e.diving && e.diving.phase !== "home";
+// Arriving: flying in or settling into its slot at the start of a wave.
+export const arriving = (e: Enemy) => e.alive && !!e.diving && (e.diving.phase === "enter" || e.diving.phase === "settle");
+// Attacking: a dive under way, as opposed to arriving or flying home.
+export const attacking = (e: Enemy) => e.alive && !!e.diving && !arriving(e) && e.diving.phase !== "home";
 
 function shipHit(world: World): HitBy | null {
   const { x } = world.ship;
@@ -191,7 +292,7 @@ export function startDive(world: World, e: Enemy) {
   const t = world.t;
   const p = slotPos(e, t);
   const col = clamp(Math.round(world.ship.x), 0, COLS - 1);
-  const d: Dive = { phase: (["open", "flap", "rev"] as const)[e.kind], since: t, x: p.x, y: p.y, col, x0: p.x, y0: p.y, dir: 1, vx: 0, fired: 0 };
+  const d: Dive = { phase: (["open", "flap", "rev"] as const)[e.kind], since: t, x: p.x, y: p.y, col, x0: p.x, y0: p.y, dir: 1, vx: 0, fired: 0, path: -1 };
   if (e.kind === 1) {
     d.x0 = e.slot.col + drift(t + BAT_FLAP); // where it leaves the formation
     d.dir = world.ship.x >= d.x0 ? 1 : -1; // its first zig heads toward the ship's side
@@ -276,9 +377,27 @@ function stepDive(world: World, e: Enemy, d: Dive, dt: number) {
     case "drop":
       d.y += CY_DROP * dt;
       break;
-    case "home": {
+    case "home":
+    case "settle": {
       const p = slotPos(e, t);
       if (toward(p.x, p.y, HOME_SPEED)) e.diving = null;
+      return;
+    }
+    case "enter": {
+      const along = (t - d.since) * ENTRY_SPEED;
+      const was = d.y;
+      const p = entryAt(d.path, along);
+      d.x = p.x;
+      d.y = p.y;
+      if (d.fired === 0 && e.kind === 1 && was < ENTRY_FIRE_ROW && d.y >= ENTRY_FIRE_ROW) {
+        world.bullets.push(straight(d.x, d.y));
+        d.fired = 1;
+      }
+      if (d.fired === 0 && e.kind === 0 && was < ENTRY_GLOW_ROW && d.y >= ENTRY_GLOW_ROW) {
+        e.charge = t + CY_GLOW; // fires from wherever the path has it 0.8 s from now
+        d.fired = 1;
+      }
+      if (along >= entryLength(d.path)) next("settle");
       return;
     }
   }
@@ -317,14 +436,18 @@ function step(world: World, dt: number, sim?: { shipX: number }): RunEvent {
   for (const e of world.enemies) {
     if (!e.alive) continue;
     if (e.diving) stepDive(world, e, e.diving, dt);
-    else if (e.charge !== null && t >= e.charge) {
-      const p = slotPos(e, t);
+    if (e.charge !== null && t >= e.charge) {
+      const p = enemyPos(e, t);
       world.bullets.push(aimed(world, p.x, p.y));
       e.charge = null;
     }
   }
 
-  if (!sim) {
+  if (!sim && world.enemies.some(arriving)) {
+    // The formation is still flying in: nothing dives or volleys yet.
+    world.nextDive = Math.max(world.nextDive, t + ENTRY_REST);
+    world.nextVolley = Math.max(world.nextVolley, t + ENTRY_REST);
+  } else if (!sim) {
     const waiting = () => world.enemies.filter((e) => e.alive && !e.diving && e.charge === null);
     if (world.enemies.filter(attacking).length >= AT_ONCE) world.nextDive = Math.max(world.nextDive, t + DIVE_GAP);
     else if (t >= world.nextDive) {
@@ -359,12 +482,17 @@ function step(world: World, dt: number, sim?: { shipX: number }): RunEvent {
       return Math.abs(p.x - s.x) < 0.5 && Math.abs(p.y - s.y) < 0.5;
     });
     if (target) {
+      s.y = -99;
+      target.hp--;
+      if (target.hp > 0) {
+        target.hurt = t; // a Cyclops's first hit shuts its eye
+        continue;
+      }
       const at = enemyPos(target, t);
       world.pops.push({ x: at.x, y: at.y, kind: target.kind, t });
+      world.score += target.kind === 0 ? (attacking(target) ? 400 : 150) : attacking(target) ? 200 : 100;
       target.alive = false;
-      world.score += target.diving ? 200 : 100;
       world.kills++;
-      s.y = -99;
     }
   }
   world.shots = world.shots.filter((s) => s.y > -1);
@@ -372,7 +500,7 @@ function step(world: World, dt: number, sim?: { shipX: number }): RunEvent {
 
   if (!world.enemies.some((e) => e.alive)) {
     world.wave++;
-    world.enemies = formation();
+    world.enemies = formation(t, world.wave);
     world.nextDive = t + diveEvery(world.wave);
   }
 
@@ -478,14 +606,14 @@ export function movePath(world: World, move: Move): (s: number) => number {
 }
 
 // The lowest enemy above `x` now, and how long a shot fired now takes to reach it.
-export function targetAbove(world: World, x: number): { rowsUp: number; seconds: number; diving: boolean; kind: Kind } | null {
-  let best: { y: number; diving: boolean; kind: Kind } | null = null;
+export function targetAbove(world: World, x: number): { rowsUp: number; seconds: number; diving: boolean; kind: Kind; hp: number } | null {
+  let best: { y: number; diving: boolean; kind: Kind; hp: number } | null = null;
   for (const e of world.enemies) {
     if (!e.alive) continue;
     const p = enemyPos(e, world.t);
-    if (Math.abs(p.x - x) < 0.5 && p.y < SHIP_ROW && p.y >= 0 && (!best || p.y > best.y)) best = { y: p.y, diving: !!e.diving && e.diving.phase !== "home", kind: e.kind };
+    if (Math.abs(p.x - x) < 0.5 && p.y < SHIP_ROW && p.y >= 0 && (!best || p.y > best.y)) best = { y: p.y, diving: attacking(e), kind: e.kind, hp: e.hp };
   }
   if (!best) return null;
   const rowsUp = SHIP_ROW - best.y;
-  return { rowsUp, seconds: (rowsUp - 0.5) / SHOT_SPEED, diving: best.diving, kind: best.kind };
+  return { rowsUp, seconds: (rowsUp - 0.5) / SHOT_SPEED, diving: best.diving, kind: best.kind, hp: best.hp };
 }

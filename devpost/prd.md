@@ -54,8 +54,8 @@ Source: `enemy-design.md`, which has every number.
 - The ship glides along the bottom row and fires straight up, with a short reload between shots.
 - A shot that reaches an enemy destroys it: 100 points, 200 for a diver. A cleared formation brings a new one.
 - [x] Each kind dives its own way, with its path drawn before it lands.
-- [ ] Every wave flies in along drawn paths before the formation settles.
-- [ ] A Cyclops takes two hits, and Jev can read that one is hit once.
+- [x] Every wave flies in along drawn paths before the formation settles.
+- [x] A Cyclops takes two hits, and Jev can read that one is hit once.
 - [ ] A carrier uses its weapon until it's shot, and the dropped weapon can be grabbed and used until the wave ends.
 - [ ] Waves 1 to 6 follow the escalation table in `enemy-design.md`.
 - [ ] Enemies drift, dive and fire without any input.
