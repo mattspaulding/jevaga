@@ -16,6 +16,7 @@ import {
   type Status,
 } from "@/components/Panel";
 import { describeMoves, describeState } from "@/lib/describe";
+import { afterRun, newMemory } from "@/lib/game/coachMemory";
 import { driveWithJev, startRun, type Run, type RunEnd } from "@/lib/game/loop";
 import { randomSeed } from "@/lib/game/rng";
 import { newWorld, resetRun, type Move, type World } from "@/lib/game/world";
@@ -32,7 +33,7 @@ async function post<T>(url: string, body: unknown, signal?: AbortSignal): Promis
   return json as T;
 }
 const getMove = (input: DecideInput, signal?: AbortSignal) => post<Decision>("/api/move", input, signal);
-const getLesson = (input: { playbook: string[]; beats: BeatLog[]; cause: RunEnd["cause"]; history: RunRecord[] }) =>
+const getLesson = (input: { playbook: string[]; beats: BeatLog[]; cause: RunEnd["cause"]; history: RunRecord[]; rejected: string[] }) =>
   post<Lesson>("/api/lesson", input);
 
 const KEYS: Record<string, Move> = {
@@ -67,7 +68,7 @@ export default function Game() {
   const [lastKey, setLastKey] = useState<Move | null>(null);
   const [playbook, setPlaybook] = useState<string[]>(["Jump forward."]);
   const [previousPlaybook, setPreviousPlaybook] = useState<string[]>([]);
-  const history = useRef<RunRecord[]>([]);
+  const memory = useRef(newMemory());
   const [coach, setCoach] = useState<Coach>({ kind: "idle" });
   const [runs, setRuns] = useState<(RunEnd & { n: number; who: Mode })[]>([]);
   // Each Start gets a run id; Stop bumps it, so an older loop still awaiting
@@ -146,9 +147,10 @@ export default function Game() {
           if (stopped()) return;
         }
       }
+      setCoach({ kind: "idle" });
       while (!stopped()) {
+        // The coach's last message stays up during the next run, so viewers can watch it play out.
         setDecision(null);
-        setCoach({ kind: "idle" });
         setStatus("running");
         const run = newRun();
         const [end, decisions] = await Promise.all([
@@ -168,7 +170,16 @@ export default function Game() {
         ]);
         if (!end || stopped()) return;
         finishRun(end, "jev");
-        history.current = [...history.current, { distance: end.distance, cause: end.cause, playbook: playbookRef.current }];
+        // If this playbook did much worse than the best run's, take it back.
+        const rollback = afterRun(memory.current, { n: runCount.current, distance: end.distance, cause: end.cause, playbook: playbookRef.current });
+        if (rollback) {
+          setPreviousPlaybook(playbookRef.current);
+          playbookRef.current = rollback.playbook;
+          setPlaybook(rollback.playbook);
+          setCoach({ kind: "rollback", rollback });
+          await sleep(PAUSE_BETWEEN_RUNS_MS * 2);
+          continue;
+        }
 
         setStatus("coaching");
         setCoach({ kind: "thinking" });
@@ -177,7 +188,8 @@ export default function Game() {
             playbook: playbookRef.current,
             beats: decisions,
             cause: end.cause,
-            history: history.current,
+            history: memory.current.history,
+            rejected: memory.current.rejected,
           });
           if (stopped()) return;
           setPreviousPlaybook(playbookRef.current);

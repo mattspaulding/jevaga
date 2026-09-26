@@ -3,6 +3,7 @@
 import type { RunEnd } from "@/lib/game/loop";
 import { MOVES, type Move } from "@/lib/game/world";
 import type { Decision } from "@/lib/system1/types";
+import type { Rollback } from "@/lib/game/coachMemory";
 import type { Lesson } from "@/lib/system2/nemotron";
 
 export type Status = "idle" | "starting" | "running" | "retrying" | "coaching" | "stopped" | "error";
@@ -41,7 +42,12 @@ export function YouBox({ lastKey }: { lastKey: Move | null }) {
   );
 }
 
-export type Coach = { kind: "idle" } | { kind: "thinking" } | { kind: "lesson"; lesson: Lesson } | { kind: "failed" };
+export type Coach =
+  | { kind: "idle" }
+  | { kind: "thinking" }
+  | { kind: "lesson"; lesson: Lesson }
+  | { kind: "rollback"; rollback: Rollback }
+  | { kind: "failed" };
 
 export function CoachBox({ coach }: { coach: Coach }) {
   return (
@@ -50,6 +56,17 @@ export function CoachBox({ coach }: { coach: Coach }) {
       {coach.kind === "idle" && <p className="muted">Watching. Teaches after each run.</p>}
       {coach.kind === "thinking" && <p className="thinking">thinking…</p>}
       {coach.kind === "failed" && <p className="warn">Couldn&apos;t write a lesson this time.</p>}
+      {coach.kind === "rollback" && (
+        <>
+          <p className="happened">
+            That made it worse: row {coach.rollback.distance}, down from row {coach.rollback.bestDistance}.
+          </p>
+          <p className="rule">
+            Took back {coach.rollback.undone.length === 1 ? "the new rule" : `${coach.rollback.undone.length} rules`}. Back to the playbook from run{" "}
+            {coach.rollback.bestRun}.
+          </p>
+        </>
+      )}
       {coach.kind === "lesson" && (
         <>
           <p className="happened">{coach.lesson.whatHappened}</p>

@@ -45,6 +45,7 @@ How to choose the change:
 - Pick the one change that would most likely have saved the frog this run. The model's answer lands a few tenths of a second after it is asked, so a car arriving within about 0.5 s is already dangerous.
 - If an existing rule caused this death, or came in right before a worse run, replace or remove it.
 - If the playbook is full (${MAX_RULES} rules), you must replace or remove.
+- Never bring back a rule listed as taken back: those made the frog do worse.
 - A rule is "If <situation>, <move>." in 20 words or fewer. It names one lane ("your lane", "lane +1", "lane -1") and exactly one move ("forward", "wait", "left", "right" or "back"). Use thresholds ("car now", "car within 0.5 s", "clear for 1 s or more"), never exact windows like "car from 0.1 to 0.6 s".
 Example reply, about a different situation from yours (don't copy it):
 What happened: The frog waited in its lane while a car drove into it.
@@ -94,7 +95,12 @@ function ruleProblem(rule: string): string | null {
 
 // Applies one edit to the learned rules. A new rule about the same situation
 // as an existing one replaces it, so the playbook can't contradict itself.
-export function applyEdit(playbook: string[], edit: Edit, rule: string | undefined): { rules: string[]; change: string } | string {
+export function applyEdit(
+  playbook: string[],
+  edit: Edit,
+  rule: string | undefined,
+  rejected: string[] = [],
+): { rules: string[]; change: string } | string {
   const rules = learned(playbook);
   if (edit.op === "remove") {
     if (edit.n < 1 || edit.n > rules.length) return `There is no rule ${edit.n} to remove.`;
@@ -103,6 +109,10 @@ export function applyEdit(playbook: string[], edit: Edit, rule: string | undefin
   if (!rule) return "Add and replace need a rule.";
   const problem = ruleProblem(rule);
   if (problem) return problem;
+  // Same lanes and same move as a rule that was taken back counts as bringing it back, however it's worded.
+  const lanesOf = (r: string) => situation(r).split("|")[0];
+  const retried = rejected.find((r) => lanesOf(r) === lanesOf(rule) && action(r) === action(rule));
+  if (retried) return `"${rule}" is the same as "${retried}", which was taken back because the frog did worse with it.`;
   const clash = rules.findIndex((r) => situation(r) === situation(rule));
   if (clash >= 0 && action(rules[clash]) === action(rule) && !(edit.op === "replace" && edit.n === clash + 1))
     return `Rule ${clash + 1} already says that. Pick a different change.`;
@@ -140,12 +150,13 @@ export async function writeLesson(input: {
   beats: BeatLog[];
   cause: "hit" | "stalled";
   history?: RunRecord[];
+  rejected?: string[];
 }): Promise<Lesson> {
   const mistake = mistakeBeat(input);
   let note: string | undefined;
   for (let attempt = 1; attempt <= 2; attempt++) {
     const reply = await ask(input, mistake, note);
-    const applied = applyEdit(input.playbook, reply.edit, reply.rule);
+    const applied = applyEdit(input.playbook, reply.edit, reply.rule, input.rejected);
     const problem = typeof applied === "string" ? applied : coversMistake(applied.rules, mistake);
     if (!problem && typeof applied !== "string")
       return { whatHappened: reply.whatHappened, change: applied.change, playbook: [...applied.rules, DEFAULT_RULE] };
@@ -155,7 +166,7 @@ export async function writeLesson(input: {
 }
 
 async function ask(
-  input: { playbook: string[]; beats: BeatLog[]; cause: "hit" | "stalled"; history?: RunRecord[] },
+  input: { playbook: string[]; beats: BeatLog[]; cause: "hit" | "stalled"; history?: RunRecord[]; rejected?: string[] },
   mistake: ReturnType<typeof mistakeBeat>,
   retryNote?: string,
 ) {
@@ -175,6 +186,7 @@ async function ask(
           ),
         ]
       : []),
+    ...(input.rejected?.length ? ["Rules taken back because the frog did worse with them (never bring these back):", ...input.rejected.map((r) => `- ${r}`)] : []),
     "Playbook used this run:",
     ...rules.map((r, i) => `${i + 1}. ${r}`),
     `(then: ${DEFAULT_RULE})`,

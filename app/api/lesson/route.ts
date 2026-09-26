@@ -5,7 +5,7 @@ import { writeLesson, type BeatLog, type RunRecord } from "@/lib/system2/nemotro
 // few beats and writes what happened plus one rule for the playbook.
 export async function POST(request: Request) {
   const body = await request.json().catch(() => null);
-  const { playbook, beats, cause, history } = body ?? {};
+  const { playbook, beats, cause, history, rejected } = body ?? {};
   const valid =
     Array.isArray(playbook) &&
     playbook.length > 0 &&
@@ -38,10 +38,13 @@ export async function POST(request: Request) {
           h.playbook.length <= 50 &&
           h.playbook.every((r) => typeof r === "string" && r.length <= 200),
       ));
-  if (!valid || !historyOk) return Response.json({ error: "Bad request" }, { status: 400 });
+  const rejectedOk =
+    rejected === undefined ||
+    (Array.isArray(rejected) && rejected.length <= 50 && rejected.every((r: unknown) => typeof r === "string" && r.length <= 200));
+  if (!valid || !historyOk || !rejectedOk) return Response.json({ error: "Bad request" }, { status: 400 });
 
   try {
-    return Response.json(await writeLesson({ playbook, beats, cause, history }));
+    return Response.json(await writeLesson({ playbook, beats, cause, history, rejected }));
   } catch (e) {
     const message = e instanceof Error ? e.message : "Unknown error";
     console.error("[lesson]", message);
