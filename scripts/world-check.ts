@@ -2,6 +2,9 @@
 // Run: pnpm world-check
 import { describeMoves } from "../lib/describe";
 import { LETTERS, SPRITES } from "../lib/game/sprites";
+import { createRecorder, type Death } from "../lib/learn/recorder";
+import { playback, replay } from "../lib/learn/replay";
+import { fake } from "../lib/system1/fake";
 import {
   act,
   advance,
@@ -19,6 +22,7 @@ import {
   SHIP_ROW,
   SHIP_SPEED,
   steer,
+  stepN,
   targetAbove,
   threatAt,
   threatOnPath,
@@ -203,5 +207,90 @@ function quiet(seed = 1): World {
   check("every sprite the renderer draws exists", [...needed, ...frames].every((n) => n in SPRITES));
 }
 
-console.log(failures ? `\n${failures} check(s) failed` : "\nAll checks passed");
-process.exit(failures ? 1 : 0);
+// Replays depend on a copied fight playing out exactly like the original.
+{
+  const w = newWorld(5);
+  const plan: [number, "left" | "right" | "stay" | "fire"][] = [
+    [40, "left"], [14, "fire"], [30, "right"], [14, "fire"], [25, "stay"], [14, "fire"], [60, "left"], [14, "fire"],
+  ];
+  stepN(w, 150); // 3 s in, a dive and volleys already under way
+  const copy = structuredClone(w);
+  check("a world is plain data (the copy equals the original)", JSON.stringify(copy) === JSON.stringify(w));
+  for (const world of [w, copy])
+    for (const [n, move] of plan) {
+      stepN(world, n);
+      act(world, move);
+    }
+  stepN(w, 400);
+  stepN(copy, 400);
+  check("a copied world plays out the same with the same moves (same dives, volleys, score, fate)", JSON.stringify(copy) === JSON.stringify(w));
+  check("the random state travels with the copy", copy.rngState === w.rngState && copy.rngState !== newWorld(5).rngState);
+}
+
+// A recorded death replays deterministically, and playback shows exactly the replayed flight.
+async function replayChecks() {
+  const w = newWorld(5);
+  const rec = createRecorder();
+  let death: Death | null = null;
+  for (let i = 0; i < 400 && w.alive; i++) {
+    const input = { state: "s", moves: describeMoves(w), rules: [] };
+    rec.onAsk(input, w);
+    rec.onDecision({ move: "stay", probabilities: { left: 0, right: 0, stay: 1, fire: 0 }, confidence: 1, source: "simulated" });
+    stepN(w, 14);
+  }
+  death = rec.toDeath(1, w);
+  check("a ship that never moves dies, and the recorder turns it into a death", death !== null && death.hitBy !== null);
+  if (death) {
+    check("the replay starts about 1.5 s before the hit", near(death.tHit - death.start.t, 1.5, 0.3));
+    const sitStill = async () => ({ move: "stay" as const, probabilities: { left: 0, right: 0, stay: 1, fire: 0 }, confidence: 1, source: "simulated" as const });
+    const d = death;
+    const again = await replay(d, [], sitStill);
+    check(`sitting still again dies again (${again.outcome})`, again.outcome === "hit");
+    const dodger = await replay(d, [], fake.decide);
+    const pb = playback(d, dodger);
+    while (!pb.done()) pb.step();
+    check(`playback ends exactly where the replay did (${dodger.outcome}, ${dodger.moves.length} moves)`, JSON.stringify(pb.world) === JSON.stringify(dodger.final));
+    const twice = await replay(d, [], fake.decide);
+    check("the same replay twice gives the same flight", JSON.stringify(twice.final) === JSON.stringify(dodger.final));
+  }
+
+  // A live flight with slow answers (20 steps) and one question lost to an outage:
+  // replaying Jev's own answers must still retrace it to the exact step, even when
+  // the unanswered last question is answered "left" in the replay.
+  {
+    const w = newWorld(5);
+    const rec2 = createRecorder();
+    const picks: ("left" | "right" | "stay" | "fire")[] = ["fire", "left", "fire", "right", "stay", "fire"];
+    let k = 0;
+    for (let i = 0; i < 600 && w.alive; i++) {
+      rec2.onAsk({ state: "s", moves: describeMoves(w), rules: [] }, w);
+      if (i === 5) {
+        rec2.onAskFailed(); // an outage: no answer, the fight runs on without a move
+        if (stepN(w, 125)) break;
+        continue;
+      }
+      if (stepN(w, 20)) break; // the hit came before this answer
+      const move = picks[k++ % picks.length];
+      act(w, move);
+      rec2.onDecision({ move, probabilities: { left: 0, right: 0, stay: 0, fire: 0, [move]: 1 }, confidence: 1, source: "simulated" });
+    }
+    const slow = rec2.toDeath(2, w);
+    check("a slow flight with an outage still dies and records a death", slow !== null);
+    if (slow) {
+      let i = 0;
+      const own = async () => {
+        const a = slow.asked[i++];
+        const move = a ? a.pick : ("left" as const);
+        return { move, probabilities: { left: 0, right: 0, stay: 0, fire: 0, [move]: 1 }, confidence: 1, source: "simulated" as const };
+      };
+      const r = await replay(slow, [], own);
+      check(`with Jev's own answers it retraces to the exact step (${r.outcome} at step ${r.final.steps}, died at ${slow.hitStep})`, r.outcome === "hit" && r.final.steps === slow.hitStep);
+      check("the lost question left no beat in the recording", slow.schedule.filter((b) => b.answer === null).length <= 1);
+    }
+  }
+}
+
+replayChecks().then(() => {
+  console.log(failures ? `\n${failures} check(s) failed` : "\nAll checks passed");
+  process.exit(failures ? 1 : 0);
+});

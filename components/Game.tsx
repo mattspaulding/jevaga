@@ -2,12 +2,12 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import GameCanvas from "@/components/GameCanvas";
-import { Controls, DecisionBox, ModeSwitch, PlanBox, RunHistory, StatusChip, YouBox, type Mode, type RunRow, type Status } from "@/components/Panel";
+import { Controls, DecisionBox, ModeSwitch, RunHistory, StatusChip, YouBox, type Mode, type RunRow, type Status } from "@/components/Panel";
 import { describeFight, describeMoves } from "@/lib/describe";
-import { drivePlanner, driveWithJev, startRun, type Run, type RunEnd } from "@/lib/game/loop";
+import { driveWithJev, startRun, type Run, type RunEnd } from "@/lib/game/loop";
 import { randomSeed } from "@/lib/game/rng";
 import { newWorld, resetRun, type Move, type World } from "@/lib/game/world";
-import { STARTING_PLAN, type DecideInput, type Decision } from "@/lib/system1/types";
+import type { DecideInput, Decision } from "@/lib/system1/types";
 
 const PAUSE_BETWEEN_RUNS_MS = 1500;
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -19,8 +19,6 @@ async function post<T>(url: string, body: unknown, signal?: AbortSignal): Promis
   return json as T;
 }
 const getMove = (input: DecideInput, signal?: AbortSignal) => post<Decision>("/api/move", input, signal);
-const getPlan = (input: { state: string; plan: string; recentMoves: Move[]; seconds: number }) =>
-  post<{ plan: string }>("/api/plan", input);
 
 const KEYS: Record<string, Move> = { ArrowLeft: "left", a: "left", ArrowRight: "right", d: "right", " ": "fire" };
 
@@ -43,12 +41,8 @@ export default function Game() {
   const [error, setError] = useState<string | null>(null);
   const [decision, setDecision] = useState<Decision | null>(null);
   const [lastKey, setLastKey] = useState<Move | null>(null);
-  const [plan, setPlan] = useState(STARTING_PLAN);
-  const planRef = useRef(plan);
-  const [planAt, setPlanAt] = useState<number | null>(null); // when the current plan arrived (ms)
-  const [planStale, setPlanStale] = useState(false);
-  const [now, setNow] = useState(() => performance.now());
-  const recentMoves = useRef<Move[]>([]);
+  // Jev's rulebook. Empty until the coach (slice 9) starts earning rules from deaths.
+  const rulesRef = useRef<string[]>([]);
   const [runs, setRuns] = useState<RunRow[]>([]);
   const [banner, setBanner] = useState<string | null>(null); // "HIT · RUN 4 OVER", shown until the next run starts
   // Each Start gets a run id; Stop bumps it, so an older loop still awaiting
@@ -56,12 +50,6 @@ export default function Game() {
   const runId = useRef(0);
   const runCount = useRef(0);
   const running = status === "running" || status === "starting" || status === "retrying" || status === "between";
-
-  // Tick once a second so the plan's age stays current.
-  useEffect(() => {
-    const id = setInterval(() => setNow(performance.now()), 1000);
-    return () => clearInterval(id);
-  }, []);
 
   // "You" mode: holding ← → (A D) glides the ship smoothly; letting go stops
   // it. Space fires, and holding it keeps firing as fast as the gun reloads.
@@ -149,7 +137,7 @@ export default function Game() {
       const probe = resetRun(base);
       for (let tries = 1; ; tries++) {
         try {
-          await getMove({ state: describeFight(probe), moves: describeMoves(probe), plan: planRef.current });
+          await getMove({ state: describeFight(probe), moves: describeMoves(probe), rules: rulesRef.current });
           if (stopped()) return;
           break;
         } catch (e) {
@@ -167,13 +155,11 @@ export default function Game() {
         setDecision(null);
         setStatus("running");
         const run = newRun();
-        recentMoves.current = [];
         const [end] = await Promise.all([
           run.done,
           driveWithJev(run, getMove, {
-            plan: () => planRef.current,
+            rules: () => rulesRef.current,
             onDecision: (d) => {
-              recentMoves.current = [...recentMoves.current.slice(-7), d.move];
               if (!stopped()) setDecision(d);
             },
             onPause: () => {
@@ -181,20 +167,6 @@ export default function Game() {
             },
             onResume: () => {
               if (!stopped()) setStatus("running");
-            },
-          }),
-          drivePlanner(run, getPlan, {
-            plan: () => planRef.current,
-            recentMoves: () => recentMoves.current,
-            onPlan: (p) => {
-              if (stopped()) return;
-              planRef.current = p;
-              setPlan(p);
-              setPlanAt(performance.now());
-              setPlanStale(false);
-            },
-            onStale: () => {
-              if (!stopped()) setPlanStale(true);
             },
           }),
         ]);
@@ -228,12 +200,11 @@ export default function Game() {
           <h1 className="title">JEVAGA</h1>
           <StatusChip status={status} error={error} />
         </div>
-        <p className="tagline">Jev flies the ship four times a second. Nemotron rewrites its plan every three seconds.</p>
+        <p className="tagline">Jev flies the ship four times a second, on reflexes alone.</p>
         <ModeSwitch mode={mode} onChange={setMode} disabled={running} />
         {mode === "jev" ? (
           <>
             <DecisionBox decision={decision} status={status} />
-            <PlanBox plan={plan} age={planAt === null ? null : Math.max(0, (now - planAt) / 1000)} stale={planStale} />
           </>
         ) : (
           <YouBox lastKey={lastKey} />

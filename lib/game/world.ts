@@ -1,4 +1,4 @@
-import { makeRng } from "./rng";
+import { nextRandom } from "./rng";
 
 // Jevaga: a Galaga-style fight in continuous time. Positions are in columns
 // (x, 0-8) and rows (y, 0 at the top). Everything moves continuously: the
@@ -8,7 +8,7 @@ import { makeRng } from "./rng";
 export const COLS = 9;
 export const ROWS = 14;
 export const SHIP_ROW = 13;
-const SUBSTEP = 0.02;
+export const SUBSTEP = 0.02; // seconds per physics step
 export const SHIP_SPEED = 5; // columns per second while steering
 // Jev's next answer lands about this long after its last one, so a "left" or
 // "right" from Jev glides that way for this long and then stops.
@@ -37,10 +37,15 @@ export type Bullet = { x: number; y: number };
 export type Shot = { x: number; y: number };
 export type Pop = { x: number; y: number; kind: 0 | 1 | 2; t: number }; // an enemy destroyed at (x, y) at time t
 
+export type HitBy = { by: "bullet" | "diver"; x: number; y: number };
+
+// Plain data only (no functions or class instances), so structuredClone
+// copies a fight exactly and a copy plays out the same as the original.
 export type World = {
   seed: number;
-  rng: () => number;
+  rngState: number; // mulberry32 state; see rand()
   t: number;
+  steps: number; // physics steps taken, so a replay can act on exactly the same step
   ship: { x: number; vx: number; glideUntil: number; reloadUntil: number };
   enemies: Enemy[];
   bullets: Bullet[];
@@ -52,6 +57,7 @@ export type World = {
   nextDive: number;
   nextVolley: number;
   alive: boolean;
+  hitBy: HitBy | null; // what hit the ship, once something has
 };
 
 export type RunEvent = null | "hit";
@@ -75,8 +81,9 @@ export function enemyPos(e: Enemy, t: number): { x: number; y: number } {
 export function newWorld(seed: number): World {
   return {
     seed,
-    rng: makeRng(seed),
+    rngState: seed >>> 0,
     t: 0,
+    steps: 0,
     ship: { x: 4, vx: 0, glideUntil: 0, reloadUntil: 0 },
     enemies: formation(),
     bullets: [],
@@ -88,7 +95,15 @@ export function newWorld(seed: number): World {
     nextDive: 2,
     nextVolley: 1,
     alive: true,
+    hitBy: null,
   };
+}
+
+// The fight's random numbers: dive and volley picks. Advances world.rngState.
+function rand(world: World): number {
+  const r = nextRandom(world.rngState);
+  world.rngState = r.state;
+  return r.value;
 }
 
 // Every run on a seed replays the same fight: same formation, same dive order.
@@ -97,10 +112,12 @@ export const resetRun = (world: World) => newWorld(world.seed);
 const bulletHits = (b: Bullet, x: number) => Math.abs(b.x - x) < SHIP_HALF && Math.abs(b.y - SHIP_ROW) < 0.5;
 const diverHits = (d: { x: number; y: number }, x: number) => Math.abs(d.x - x) < 0.6 && Math.abs(d.y - SHIP_ROW) < 0.6;
 
-function shipHit(world: World): boolean {
+function shipHit(world: World): HitBy | null {
   const { x } = world.ship;
-  if (world.bullets.some((b) => bulletHits(b, x))) return true;
-  return world.enemies.some((e) => e.alive && e.diving && diverHits(e.diving, x));
+  const b = world.bullets.find((b) => bulletHits(b, x));
+  if (b) return { by: "bullet", x: b.x, y: b.y };
+  const d = world.enemies.find((e) => e.alive && e.diving && diverHits(e.diving, x))?.diving;
+  return d ? { by: "diver", x: d.x, y: d.y } : null;
 }
 
 function step(world: World, dt: number): RunEvent {
@@ -108,6 +125,7 @@ function step(world: World, dt: number): RunEvent {
   const glide = Math.max(0, Math.min(dt, ship.glideUntil - world.t));
   ship.x = clamp(ship.x + ship.vx * glide, 0, COLS - 1);
   world.t += dt;
+  world.steps++;
   const t = world.t;
   if (t >= ship.glideUntil) ship.vx = 0;
 
@@ -132,7 +150,7 @@ function step(world: World, dt: number): RunEvent {
   if (t >= world.nextDive) {
     const pool = waiting();
     if (pool.length) {
-      const e = pool[Math.floor(world.rng() * pool.length)];
+      const e = pool[Math.floor(rand(world) * pool.length)];
       const p = enemyPos(e, t);
       e.diving = { x: p.x, y: p.y, fired: 0 };
     }
@@ -141,7 +159,7 @@ function step(world: World, dt: number): RunEvent {
   if (t >= world.nextVolley) {
     const pool = waiting();
     if (pool.length) {
-      const e = pool[Math.floor(world.rng() * pool.length)];
+      const e = pool[Math.floor(rand(world) * pool.length)];
       const p = enemyPos(e, t);
       world.bullets.push({ x: p.x, y: p.y + 0.5 });
     }
@@ -172,11 +190,20 @@ function step(world: World, dt: number): RunEvent {
     world.nextDive = t + diveEvery(world.wave);
   }
 
-  if (shipHit(world)) {
+  const hit = shipHit(world);
+  if (hit) {
     world.alive = false;
+    world.hitBy = hit;
     return "hit";
   }
   return null;
+}
+
+// Exactly n physics steps. Replays use this so a copy of the world and the
+// original take identical steps and stay identical.
+export function stepN(world: World, n: number): RunEvent {
+  for (let i = 0; i < n && world.alive; i++) if (step(world, SUBSTEP)) return "hit";
+  return world.alive ? null : "hit";
 }
 
 // Moves time forward in small steps, checking hits after each one.

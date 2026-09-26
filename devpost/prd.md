@@ -62,7 +62,7 @@ Source: `scope.md > Inspiration & Identity`, `design-handoff.md`, the "Jevaga sp
 - The game tests the rule by rebuilding the fight from before the death and flying it again, asking Jev at each step with the new rulebook. The rule passes if the ship survives past the moment it died.
 - The rule also has to pass every earlier death Jev learned from. A rule that fixes this death but breaks an old fix is thrown out.
 - A rule may not stop Jev shooting. The game keeps a few calm moments from Jev's runs (nothing arriving, an enemy above, the gun ready), and a new rule has to leave Jev firing in them.
-- A death that the replay can't reproduce with the old rulebook (Jev survives it without any new rule, because of timing) is marked as luck and needs no rule.
+- The replay uses the live run's own timing: every question asked at the same moment, every answer landing when it did. With the old rulebook it retraces the death exactly; if it somehow doesn't (Jev answered a repeated question differently), the death is marked as luck and needs no rule.
 - If a rule fails, Nemotron gets one more try with the replay's result. If that fails too, the rulebook stays as it was.
 - The rulebook holds at most 8 rules. When it's full, a new rule has to replace one.
 - [ ] After each Jev death the COACH window shows what happened and the proposed rule.

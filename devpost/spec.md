@@ -12,7 +12,7 @@ There are four pieces.
 
 1. **The page.** A Next.js page runs the fight on a canvas and draws the panel. A physics timer moves everything every frame. The ship moves the instant someone decides.
 2. **Jev, the fast brain (System 1).** About four times a second the page describes the fight in plain sentences ("where you stop (x 4.0): bullet in 0.4 s; a little left (x 2.8): nothing for 2.5+ s") and asks Jev, through `/api/move`, which of four moves to make. Its instructions are one starting line plus the rulebook. The fight keeps moving while Jev thinks.
-3. **The flight recorder and the replay.** While Jev flies, the page keeps copies of the fight from the last few seconds and every question Jev was asked. After a death it can rebuild the fight from 1.5 s before the hit and fly it again in simulated time, asking Jev at each step. The world is deterministic, so the same fight with the same answers gives the same outcome.
+3. **The flight recorder and the replay.** While Jev flies, the page keeps copies of the fight from the last few seconds and every question Jev was asked. After a death it can rebuild the fight from 1.5 s before the hit and fly it again in simulated time, asking Jev at the same moments as in the live run and applying each answer on the same 20 ms physics step. The world is deterministic, so the same fight with the same answers gives the same outcome to the step, and a new rule changes nothing but what Jev picks.
 4. **Nemotron, the coach (System 2).** After each death the page sends the last second or so of what Jev read and picked to `/api/coach`. NVIDIA Nemotron 3.5 Lightning on Nebius Token Factory writes what happened and one rule. The page replays the death with the rule, and every earlier death Jev learned from, and keeps the rule only if the ship survives all of them.
 
 API keys live only on the server routes. Runs, the rulebook and saved deaths live in the page's memory and reset on reload.
@@ -24,7 +24,7 @@ PRD ref: `prd.md > The Core Journey`.
 2. Start (Jev mode) → a health-check question to Jev (three tries); then `startRun` begins the physics timer and `driveWithJev` begins asking Jev. Each question is logged by the recorder with a copy of the world.
 3. Each Jev question → `describeFight()` + `describeMoves()` + `instructionsFor(rules)` → `POST /api/move` → Jev via the gateway → `{ move, probabilities, confidence }` → the ship moves or fires the moment it lands → the JEV window updates.
 4. A bullet or diver touches the ship → the run ends → HIT banner, the run joins RUNS → the recorder builds a `Death`.
-5. Reproduce: `replay(death, rules)` with the rulebook Jev had. If the ship survives, the death was timing luck; no rule, go to 9.
+5. Reproduce: `replay(death, rules)` with the rulebook Jev had. Jev is asked the same questions, the exact-repeat cache gives the same answers, and the death happens again. If it doesn't (the cache lost them and Jev answered differently), the death is marked luck; no rule, go to 9.
 6. Coach: `POST /api/coach` with the death as prose and the rulebook → `{ happened, change, rule }`.
 7. Test: `replay(death, newRules)` must survive; then every saved death marked fixed must still survive with `newRules`. On failure, one more coach call with the replay's result, then test again.
 8. Show: the canvas plays the replay of this death with the rules that were tested (REPLAY tag, SURVIVED or HIT). The COACH window shows the verdict; a kept rule lands in the RULEBOOK with a flash. The death is saved as fixed, luck or unsolved.
@@ -46,6 +46,7 @@ Unchanged: `pnpm dev`, open http://localhost:3000 (`?seed=N` optional), keys in 
 ### The fight
 `lib/game/world.ts`. PRD ref: `prd.md > The fight`.
 - **Field:** positions x 0–8 (columns) × y 0–13 (rows, 0 at the top), continuous. Time `t` in seconds.
+- **Physics steps:** always whole 20 ms steps (`stepN`), live and in replays; the live timer carries the leftover time to the next frame. `world.steps` counts them, so a question or an answer can be pinned to an exact step.
 - **Randomness:** mulberry32 whose state is a number in the world (`world.rngState`), not a closure, so `structuredClone(world)` copies the fight exactly, including every future dive and volley. Replaces the closure in `lib/game/rng.ts`.
 - **Ship:** bottom row (y = 13), continuous x, glides at 5 columns/s. The keyboard glides while an arrow is held and stops on release. Jev's `left`/`right` glide 0.25 s and stop, so a move goes where its description says; `stay` stops; `fire` stops and launches a shot if the gun is ready. Reload 0.35 s, at most 3 shots on screen. Shots climb 12 rows/s.
 - **Formation:** 3 rows × 7 enemies (rows 1–3, columns 1–7), drifting side to side by up to one column (`sin(0.6 t)`).
@@ -68,22 +69,22 @@ Unchanged: `pnpm dev`, open http://localhost:3000 (`?seed=N` optional), keys in 
 - Carried over: the swappable interface, Jev through the gateway's TypeSafe route, the offline fake (SIMULATED), the exact-repeat cache, response validation, `driveWithJev` (at most 4 questions a second; the move applies when the answer lands; errors or 2.5 s without an answer pause the fight and retry every 3 s).
 - `DecideInput` becomes `{ state, moves, rules: string[] }`; the cache key uses the rules.
 - Instructions (`instructionsFor(rules)` in `lib/system1/types.ts`): "Pick the ship's next move in a space shooter. Stay alive and shoot enemies." With rules, add a blank line, "Rules you've learned. Follow each one when its situation comes up:", and the rules numbered 1 to n. No hand-written survival rule: Jev starts dumb.
-- `driveWithJev` gains an `onAsk(input, world)` hook, called just before each question, and passes each answer to `onDecision` as now. The recorder uses both.
+- `driveWithJev` gains an `onAsk(input, world)` hook, called just before each question, and an `onAskFailed()` hook for a question that got no answer, and passes each answer to `onDecision` as now. The recorder uses all three.
 
 ### The flight recorder
 `lib/learn/recorder.ts`. PRD ref: `prd.md > Jev learns from its deaths (System 2)`.
 - Control moments: the recorder also keeps up to 5 calm moments from Jev runs, spread over time: nothing arriving within 2.5 s where the ship stops, an enemy above, the gun ready. They are the check that a rule leaves Jev shooting.
-- `onAsk`: push `{ t, world: structuredClone(world), state, moves, rules }`; `onDecision` fills in `{ pick, probabilities, confidence, answeredAt }` on the matching entry. Entries older than 4 s are dropped, so memory stays small.
-- On a hit, `toDeath(runNumber)` returns a `Death`: `start` is the recorded world from the latest entry at or before `t_hit − REPLAY_LEAD` (1.5 s), or the first entry if the run was shorter; `asked` is every entry from `start` on; plus `t_hit`, `hitBy`, and the rules Jev had.
+- `onAsk`: push `{ t, world: structuredClone(world), state, moves, rules, ask: world.steps }`; `onDecision` (called right after the answer is applied) fills in `{ pick, probabilities, confidence }` and the step it landed on. `onAskFailed` (an error or timeout paused the fight) drops that question: it never moved the ship. Entries older than 4 s are dropped, so memory stays small.
+- On a hit, `toDeath(runNumber)` returns a `Death`: `start` is the recorded world from the latest entry at or before `t_hit − REPLAY_LEAD` (1.5 s), or the first entry if the run was shorter; `asked` is every answered entry from `start` on; `schedule` is every entry's ask step and answer step (none for a question the hit beat); plus `t_hit`, the step the hit landed on (`hitStep`), `hitBy`, and the rules Jev had.
 - Only Jev runs are recorded.
 
 ### The replay
 `lib/learn/replay.ts`. PRD ref: `prd.md > Jev learns from its deaths (System 2)`.
-- `replay(death, rules, decide)`: clone `death.start` and fly it in simulated time, as fast as Jev answers. Ask Jev at the start; apply each answer `REPLAY_LATENCY` (0.27 s, the measured median) after it was asked; ask the next question as soon as the previous one is applied (the live loop's pace). Advance the world in 20 ms steps between. Stop at a hit, or once the flight is past `t_hit + SURVIVE_PAST` (1.0 s) and nothing is about to hit the ship: `threatOnPath(world, movePath(world, "stay"))` is null or more than 0.5 s away. A rule that only postpones the same death keeps being flown until it lands, up to `t_hit + 2.5 s`, and then counts as a hit.
+- `replay(death, rules, decide)`: clone `death.start` and fly it in simulated time, as fast as Jev answers. Follow `death.schedule`: ask Jev on each recorded ask step and apply its answer on the recorded answer step. A question the hit beat (no answer step) has its answer applied no earlier than the step after the hit. If the recorded questions run out before the hit (an outage), the replay asks nothing until the hit step, as live. Past the hit (the ship lived longer this time), ask as soon as the previous answer is applied and apply each answer 14 steps (0.28 s, about the median) later. Stop at a hit, or once the flight is past `t_hit + SURVIVE_PAST` (1.0 s) and nothing is about to hit the ship: `threatOnPath(world, movePath(world, "stay"))` is null or more than 0.5 s away. A rule that only postpones the same death keeps being flown until it lands, up to `t_hit + 2.5 s`, and then counts as a hit.
 - Returns `{ outcome: "survived" | "hit" | "untested", hitAt?, moves: { t, move }[], asked: number }`. A Jev error or timeout makes the result `untested`, never `survived`.
 - `playback(death, moves)` rebuilds the same flight for the canvas from the recorded moves with no model calls, so what the viewer sees is exactly what was tested.
 - Replays of the same death with the same rules ask the same questions, so the exact-repeat cache answers the repeats and a regression check costs nothing for deaths that didn't change.
-- Fixed latency is the point: the live run's latency jitters between about 200 and 400 ms. If a death does not happen again at the median latency with the rules Jev had, it came from timing, not from a decision, and it is marked `luck`.
+- Recorded timing is the point. Slice 8 first replayed at a fixed 0.28 s latency, and 0 of 5 deaths happened again: shifting every answer by a few milliseconds changes what Jev sees from the first question on, and the fight goes another way. On the recorded schedule, 5 of 5 deaths retraced to the exact step with Jev's own answers and died again when Jev was asked again.
 
 ### The coach (System 2)
 `lib/system2/coach.ts`, `app/api/coach/route.ts`. PRD ref: `prd.md > Jev learns from its deaths (System 2)`.
@@ -123,15 +124,16 @@ type Enemy = { id: number; slot: { col: number; row: number }; kind: 0 | 1 | 2; 
 type Bullet = { x: number; y: number };         // enemy bullet, falls
 type Shot = { x: number; y: number };           // player shot, climbs
 type Pop = { x: number; y: number; kind: 0 | 1 | 2; t: number }; // a kill, for the canvas
-type World = { seed: number; rngState: number; t: number;
+type World = { seed: number; rngState: number; t: number; steps: number;
                ship: { x: number; vx: number; glideUntil: number; reloadUntil: number };
                enemies: Enemy[]; bullets: Bullet[]; shots: Shot[]; pops: Pop[]; score: number; kills: number;
                wave: number; nextDive: number; nextVolley: number; alive: boolean;
                hitBy: null | { by: "bullet" | "diver"; x: number; y: number } };
 type Asked = { t: number; state: string; moves: Record<Move, string>; pick: Move;
-               probabilities: Record<Move, number>; answeredAt: number };
-type Death = { run: number; tHit: number; hitBy: NonNullable<World["hitBy"]>; start: World;
-               asked: Asked[]; rules: string[]; status: "fixed" | "luck" | "unsolved" | "new" };
+               probabilities: Record<Move, number>; confidence: number };
+type Beat = { ask: number; answer: number | null };   // physics steps; null: the hit came first
+type Death = { run: number; tHit: number; hitStep: number; hitBy: NonNullable<World["hitBy"]>; start: World;
+               asked: Asked[]; schedule: Beat[]; rules: string[]; status: "fixed" | "luck" | "unsolved" | "new" };
 type Control = { state: string; moves: Record<Move, string> };   // a calm moment where fire was right
 type Book = { rules: string[]; deaths: Death[]; controls: Control[] };   // at most 8 rules, 5 controls
 type Run = { n: number; who: "jev" | "you"; score: number; kills: number; seconds: number; rules: number };
@@ -173,14 +175,14 @@ Unchanged: Jev at `POST https://ai-gateway.vercel.sh/typesafe/v1/systemone` (pai
 ## Important Failure Modes
 - **Jev unavailable** → the fight doesn't start, or pauses mid-run with the chip (carried over). During a replay → `untested`; the rule isn't kept and the COACH window says it couldn't be tested.
 - **Nemotron unavailable or slow** → no rule for that death; the next run starts with the rulebook unchanged and the COACH window says so.
-- **A replay doesn't match the live run** → expected sometimes, because the replay uses a fixed latency. Handled by the reproduce step, which marks those deaths `luck`.
+- **A replay doesn't match the live run** → only if Jev answers a repeated question differently (the cache was emptied, for example by a server restart). The reproduce step catches it and marks the death `luck`.
 - **Rules pile up or contradict** → at most 8; the coach must replace to add more, and every change has to keep the recent fixed deaths fixed.
 - **A rule makes Jev safe but useless** (stops firing, hugs an edge) → the control moments catch "stops firing"; an edge-hugging rule shows up as falling kills in RUNS. The judge does not score whole runs, because one run is mostly luck.
 - **Too many questions at once** → one shared 4-a-second limiter for replays; replays run one at a time.
 - **Jev answers differently to the same question** → the exact-repeat cache makes replays within a session consistent.
 
 ## What Was Simplified and Why
-- **Fixed latency in replays** (0.27 s): makes a replay repeatable and separates bad decisions from bad timing.
+- **Replays keep the live run's timing** and use a fixed 0.28 s only past the end of the recording. A rule is judged on the exact delays that killed Jev.
 - **Replays start 1.5 s before the hit and end once the ship is at least 1 s past it with nothing about to land.** Long enough to hold the decision that mattered in most deaths seen so far. Widened in the build if deaths often come back `unsolved`.
 - **One rule change per death, one retry.** Keeps the story readable and the pause short.
 - **Regression replays capped at the 8 most recent fixed deaths.** Keeps the pause under about 45 s with a retry.
@@ -193,8 +195,9 @@ Unchanged: Jev at `POST https://ai-gateway.vercel.sh/typesafe/v1/systemone` (pai
 
 **Measured so far (real models, seed 5):** a written instruction moves Jev hard ("work the right side" → right at 0.90 on the identical moment; "work the left side" → left at 0.92). Step-by-step orders hurt; strategy helped (live plans ~3,125 vs a generic fixed plan ~1,150 on the grid ship; live plans ~4,500 on the gliding ship). Death logs showed recurring patterns (overshooting glides, jittering under a homing diver, the word "stay" pulling Jev to stop), each fixed by a change to what Jev reads or is told.
 
+**Measured in slice 8 (real Jev, seed 5, 5 deaths):** with no rules at all, Jev scored 600 to 7,400 and lasted 4 to 74 s. On the recorded schedule every death retraced to the exact step and died again when Jev was asked again; the hand-written rule "Never pick a move whose description shows a bullet or diver arriving within 0.6 s." turned 5 of 5 into survivals, and Jev still fired in 5 of 5 calm moments with it.
+
 **Open, answered in the build:**
-- Does the replay reproduce most deaths at a fixed latency, or are most of them `luck`? `scripts/replay-test.ts` and the first `scripts/learn.ts` runs tell.
 - Does thinking on make Nemotron's rules pass more often? Measured on the same saved deaths, thinking off vs on.
 - Is 1.5 s of lead enough? Counted from `unsolved` deaths.
 - **Folder and repo name:** the project folder is still `GoFrogGo`.

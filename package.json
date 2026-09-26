@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "world-check": "tsx scripts/world-check.ts",
-    "plan-test": "tsx --env-file=.env.local scripts/plan-test.ts",
+    "replay-test": "tsx --env-file=.env.local scripts/replay-test.ts",
     "sim": "tsx --env-file=.env.local scripts/sim.ts"
   },
   "dependencies": {

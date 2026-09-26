@@ -1,6 +1,6 @@
 import { describeFight, describeMoves } from "../describe";
 import type { DecideInput, Decision } from "../system1/types";
-import { act, advance, fire, steer, type Move, type World } from "./world";
+import { act, fire, steer, stepN, SUBSTEP, type Move, type World } from "./world";
 
 // A run in continuous time. A physics timer advances the fight every frame;
 // the ship acts the instant someone decides (a key press, or Jev's answer landing).
@@ -34,6 +34,7 @@ export function startRun(world: World, onChange: (world: World) => void = () => 
   let paused = false;
   let finished = false;
   let last = performance.now();
+  let carry = 0; // seconds not yet stepped
   let resolve!: (end: RunEnd | null) => void;
   const done = new Promise<RunEnd | null>((r) => (resolve = r));
 
@@ -49,7 +50,12 @@ export function startRun(world: World, onChange: (world: World) => void = () => 
     const dt = (now - last) / 1000;
     last = now;
     if (paused || finished) return;
-    const event = advance(world, dt);
+    // Whole 20 ms physics steps only, the same steps a replay takes, so a
+    // recorded fight can be flown again exactly.
+    carry += dt;
+    const n = Math.floor(carry / SUBSTEP + 1e-9);
+    carry -= n * SUBSTEP;
+    const event = stepN(world, n);
     onChange(world);
     if (event) finish(true);
   }, FRAME_MS);
@@ -74,6 +80,7 @@ export function startRun(world: World, onChange: (world: World) => void = () => 
     resume() {
       paused = false;
       last = performance.now(); // time doesn't pass while paused
+      carry = 0;
     },
     stop: () => finish(false),
     ended: () => finished,
@@ -88,7 +95,9 @@ export async function driveWithJev(
   run: Run,
   getMove: (input: DecideInput, signal: AbortSignal) => Promise<Decision>,
   hooks: {
-    plan: () => string;
+    rules: () => string[];
+    onAsk?: (input: DecideInput, world: World) => void; // just before each question (the flight recorder)
+    onAskFailed?: () => void; // that question got no answer (error or timeout)
     onDecision: (d: Decision) => void;
     onPause?: () => void;
     onResume?: () => void;
@@ -98,7 +107,8 @@ export async function driveWithJev(
   while (!run.ended()) {
     await sleepUnless(lastSent + MIN_REQUEST_INTERVAL_MS - performance.now(), run.ended);
     if (run.ended()) break;
-    const input: DecideInput = { state: describeFight(run.world), moves: describeMoves(run.world), plan: hooks.plan() };
+    const input: DecideInput = { state: describeFight(run.world), moves: describeMoves(run.world), rules: hooks.rules() };
+    hooks.onAsk?.(input, run.world);
     const sent = performance.now();
     lastSent = sent;
     let decision: Decision;
@@ -106,6 +116,7 @@ export async function driveWithJev(
       decision = await getMove(input, AbortSignal.timeout(REQUEST_TIMEOUT_MS));
     } catch {
       if (run.ended()) break;
+      hooks.onAskFailed?.();
       run.pause();
       hooks.onPause?.();
       await sleepUnless(RETRY_MS, run.ended);
@@ -116,38 +127,5 @@ export async function driveWithJev(
     if (run.ended()) break;
     run.act(decision.move);
     hooks.onDecision({ ...decision, ms: Math.round(performance.now() - sent) });
-  }
-}
-
-// Nemotron plans: every PLAN_EVERY_MS during a run, send the whole fight and
-// swap in the plan that comes back. A failed or late plan leaves Jev flying
-// on the last one; the fight never waits for the strategist.
-export const PLAN_EVERY_MS = 3000;
-export async function drivePlanner(
-  run: Run,
-  getPlan: (input: { state: string; plan: string; recentMoves: Move[]; seconds: number }) => Promise<{ plan: string }>,
-  hooks: {
-    plan: () => string;
-    recentMoves: () => Move[];
-    onPlan: (plan: string) => void;
-    onStale: () => void;
-  },
-): Promise<void> {
-  while (!run.ended()) {
-    const started = performance.now();
-    try {
-      const { plan } = await getPlan({
-        state: describeFight(run.world),
-        plan: hooks.plan(),
-        recentMoves: hooks.recentMoves(),
-        seconds: run.world.t,
-      });
-      if (run.ended()) break;
-      hooks.onPlan(plan);
-    } catch {
-      if (run.ended()) break;
-      hooks.onStale();
-    }
-    await sleepUnless(PLAN_EVERY_MS - (performance.now() - started), run.ended);
   }
 }

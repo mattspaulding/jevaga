@@ -81,22 +81,6 @@ export function DecisionBox({ decision, status }: { decision: Decision | null; s
   );
 }
 
-// Nemotron's plan: Jev's instructions, rewritten every few seconds during a run.
-export function PlanBox({ plan, age, stale }: { plan: string; age: number | null; stale: boolean }) {
-  return (
-    <section className="win winCoach" aria-label="Nemotron plan">
-      <h2>NEMOTRON · NEBIUS TOKEN FACTORY</h2>
-      <p className="planText">{plan}</p>
-      <p className={`planLine ${stale ? "stale" : ""}`}>
-        {stale
-          ? "Nemotron didn't answer. Jev keeps flying on this plan."
-          : age === null
-            ? "Starting plan. Nemotron writes a new one every 3 s during a run."
-            : `Written ${Math.round(age)} s ago.`}
-      </p>
-    </section>
-  );
-}
 
 const KEY_WORD: Partial<Record<Move, string>> = { left: "LEFT", right: "RIGHT", fire: "FIRE" };
 
