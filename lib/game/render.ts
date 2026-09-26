@@ -17,7 +17,7 @@ const COLORS = {
 };
 
 export type View = {
-  shipX: number; // fractional during a slide
+  shipX: number;
   stars: { x: number; y: number; s: number }[];
   starScroll: number; // pixels
   boom: number; // 0..1 explosion progress, 0 = none
@@ -40,9 +40,9 @@ export function render(ctx: CanvasRenderingContext2D, world: World, view: View) 
     ctx.fillRect(Math.round(p.x * TILE + 2), Math.round(p.y * TILE + 3), TILE - 4, TILE - 6);
   }
   ctx.fillStyle = COLORS.bullet;
-  for (const b of world.bullets) ctx.fillRect(b.col * TILE + 7, Math.round(b.y * TILE), 2, 5);
+  for (const b of world.bullets) ctx.fillRect(Math.round(b.x * TILE + 7), Math.round(b.y * TILE), 2, 5);
   ctx.fillStyle = COLORS.shot;
-  for (const s of world.shots) ctx.fillRect(s.col * TILE + 7, Math.round(s.y * TILE), 2, 6);
+  for (const s of world.shots) ctx.fillRect(Math.round(s.x * TILE + 7), Math.round(s.y * TILE), 2, 6);
 
   const sx = view.shipX * TILE;
   const sy = SHIP_ROW * TILE;

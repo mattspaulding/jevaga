@@ -1,6 +1,6 @@
 import { describeFight, describeMoves } from "../describe";
 import type { DecideInput, Decision } from "../system1/types";
-import { act, advance, type Move, type World } from "./world";
+import { act, advance, fire, steer, type Move, type World } from "./world";
 
 // A run in continuous time. A physics timer advances the fight every frame;
 // the ship acts the instant someone decides (a key press, or Jev's answer landing).
@@ -15,6 +15,8 @@ export type RunEnd = { cause: "hit"; score: number; seconds: number };
 export type Run = {
   world: World;
   act(move: Move): void;
+  steer(dir: -1 | 0 | 1): void; // keyboard: glide while a key is held
+  fire(): void;
   pause(): void;
   resume(): void;
   stop(): void;
@@ -59,6 +61,12 @@ export function startRun(world: World, onChange: (world: World) => void = () => 
       const event = act(world, move);
       onChange(world);
       if (event) finish(true);
+    },
+    steer(dir) {
+      if (!paused && !finished) steer(world, dir);
+    },
+    fire() {
+      if (!paused && !finished) fire(world);
     },
     pause() {
       paused = true;

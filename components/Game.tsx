@@ -62,33 +62,40 @@ export default function Game() {
     return () => clearInterval(id);
   }, []);
 
-  // "You" mode: a press acts instantly; holding ← → (A D) keeps the ship
-  // sliding one column every HOLD_REPEAT_MS, and holding Space keeps firing
-  // (the gun's reload still limits the rate).
+  // "You" mode: holding ← → (A D) glides the ship smoothly; letting go stops
+  // it. Space fires, and holding it keeps firing as fast as the gun reloads.
   useEffect(() => {
     if (mode !== "you") return;
-    const HOLD_REPEAT_MS = 120;
     const held = new Set<Move>();
+    const steerFromKeys = () => {
+      // Left and right held together cancel out.
+      const dir = held.has("left") === held.has("right") ? 0 : held.has("left") ? -1 : 1;
+      runRef.current?.steer(dir);
+    };
     const onDown = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.altKey) return;
       const move = KEYS[e.key] ?? KEYS[e.key.toLowerCase()];
       if (!move) return;
       e.preventDefault();
-      if (e.repeat || held.has(move)) return; // the timer below handles holding
+      if (e.repeat || held.has(move)) return;
       held.add(move);
-      runRef.current?.act(move);
+      if (move === "fire") runRef.current?.fire();
+      else steerFromKeys();
       setLastKey(move);
     };
     const onUp = (e: KeyboardEvent) => {
       const move = KEYS[e.key] ?? KEYS[e.key.toLowerCase()];
-      if (move) held.delete(move);
+      if (!move) return;
+      held.delete(move);
+      if (move !== "fire") steerFromKeys();
     };
-    const release = () => held.clear();
+    const release = () => {
+      held.clear();
+      steerFromKeys();
+    };
     const timer = setInterval(() => {
-      // Left and right held together cancel out.
-      if (held.has("left") !== held.has("right")) runRef.current?.act(held.has("left") ? "left" : "right");
-      if (held.has("fire")) runRef.current?.act("fire");
-    }, HOLD_REPEAT_MS);
+      if (held.has("fire")) runRef.current?.fire();
+    }, 100);
     window.addEventListener("keydown", onDown);
     window.addEventListener("keyup", onUp);
     window.addEventListener("blur", release);

@@ -5,15 +5,16 @@ import { newWorld, SHIP_ROW, threatAt, type Move, type World } from "../lib/game
 import { jev } from "../lib/system1/jev";
 import { STARTING_PLAN, type Decision } from "../lib/system1/types";
 
-const FIRE_PLAN = "Ignore incoming bullets and keep firing straight up.";
+const RIGHT_PLAN = "Work the right side, x 6 to 8, and shoot the formation from there.";
+const LEFT_PLAN = "Work the left side, x 0 to 2, and shoot the formation from there.";
 const REPEATS = 3;
 
 // Ship in column 4 under an enemy; nothing launched yet.
 function fight(bulletInColumn4: boolean): World {
   const w = newWorld(1);
   w.nextDive = w.nextVolley = 1e9;
-  w.ship.col = 4;
-  if (bulletInColumn4) w.bullets.push({ col: 4, y: SHIP_ROW - 2.1 }); // reaches the ship in about 0.3 s
+  w.ship.x = 4;
+  if (bulletInColumn4) w.bullets.push({ x: 4, y: SHIP_ROW - 2.1 }); // reaches the ship in about 0.3 s
   return w;
 }
 const DANGER = fight(true);
@@ -49,22 +50,24 @@ const mostly = (ds: Decision[], ok: (m: Move) => boolean) => ds.filter((d) => ok
 
 async function main() {
   check("game rules agree: the bullet reaches column 4 in about 0.3 s", (threatAt(DANGER, 4)?.at ?? 9) < 0.4);
-  check("game rules agree: columns 3 and 5 are clear", !threatAt(DANGER, 3) && !threatAt(DANGER, 5));
+  check("game rules agree: a quarter-second glide either way is clear", !threatAt(DANGER, 2.75) && !threatAt(DANGER, 5.25));
   console.log("\nWhat Jev reads in the danger fight:\n" + describeFight(DANGER));
   console.log(describeMoves(DANGER));
 
   const dodgeDanger = await ask(DANGER, STARTING_PLAN);
   const dodgeSafe = await ask(SAFE, STARTING_PLAN);
-  const fireDanger = await ask(DANGER, FIRE_PLAN);
+  const goRight = await ask(SAFE, RIGHT_PLAN);
+  const goLeft = await ask(SAFE, LEFT_PLAN);
   console.log(`\ndodge plan, bullet coming   ${fmt(dodgeDanger)}`);
   console.log(`dodge plan, nothing coming  ${fmt(dodgeSafe)}`);
-  console.log(`fire plan,  bullet coming   ${fmt(fireDanger)}\n`);
+  console.log(`"work the right side"       ${fmt(goRight)}`);
+  console.log(`"work the left side"        ${fmt(goLeft)}\n`);
 
   check("with the dodge plan Jev slides out of the bullet's column", mostly(dodgeDanger, (m) => m === "left" || m === "right"));
   check("with the dodge plan and nothing coming, Jev fires", mostly(dodgeSafe, (m) => m === "fire"));
-  // Jev's fixed instructions say "stay alive first", so a plan shifts its choice rather than overriding survival.
-  const fireShift = fireDanger[0].probabilities.fire - dodgeDanger[0].probabilities.fire;
-  check(`the fire plan raises Jev's chance of firing under a bullet (+${fireShift.toFixed(2)})`, fireShift >= 0.1);
+  // Plans are strategy: survival rules always win, so what a plan steers is where Jev goes when it's safe.
+  check('"work the right side" makes Jev glide right', mostly(goRight, (m) => m === "right"));
+  check('"work the left side" makes Jev glide left', mostly(goLeft, (m) => m === "left"));
 
   console.log(failures ? `\n${failures} check(s) failed` : "\nAll checks passed");
   process.exit(failures ? 1 : 0);
