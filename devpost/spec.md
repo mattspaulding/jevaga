@@ -112,8 +112,15 @@ Unchanged: `pnpm dev`, open http://localhost:3000 (`?seed=N` optional), keys in 
 
 ### Panel and playfield
 `components/*`, `lib/game/render.ts`, `lib/game/sprites.ts`. PRD ref: `prd.md > Screens and Layout`, `prd.md > Look and Feel`.
-- Windows per `design-handoff.md`: Who plays switch; JEV (move, confidence, four probability bars, ms); COACH (watching, studying, testing, then the verdict: tag, "What happened: …", the rule, "Replay: survived. Earlier deaths: 3 of 3 still survive." or what failed); RULEBOOK (numbered rules, fresh rule flashes, "Empty. Jev starts on reflexes alone."); YOU (last key, legend); RUNS (who, score, kills, seconds, rules Jev had, best in gold, the run in progress); Controls with Start, Stop and Forget rules; outage chip.
+- Windows per `design-handoff.md`: Who plays switch; JEV (move, confidence, four probability bars, ms); COACH (watching, studying, testing, then the verdict: tag, "What happened: …", the rule, "Replay: survived. Earlier deaths: 3 of 3 still survive." or what failed); RULEBOOK (numbered rules, fresh rule flashes, "Empty. Jev starts on reflexes alone."); YOU (last key, legend); RUNS (who, score, kills, seconds, rules Jev had, best in gold, the run in progress); USAGE (session totals for Jev and Nemotron, tokens and cost); Controls with Start, Stop and Forget rules; outage chip.
 - Canvas: three-depth starfield, flapping formation, dive poses, bullets, shots, thrust flicker, a pop per kill, the boom on a hit; HUD score box, YOU/JEV/REPLAY tag, the "HIT · RUN N OVER" banner, and during the pause the replay playback with its SURVIVED/HIT banner.
+
+### Usage and cost
+`lib/usage.ts`, `lib/system1/{types,jev,cache,fake}.ts`, `lib/system2/coach.ts`, `components/{Game,Panel}.tsx`. PRD ref: `prd.md > Usage`.
+- Every `Decision` from Jev carries `usage: { inputTokens, outputTokens, costUsd, cached? }`. `costUsd` comes straight from the gateway's own `provider_metadata.gateway.cost` on that call; it is never computed. A cache hit returns `{ inputTokens: 0, outputTokens: 0, costUsd: 0, cached: true }`, since it made no call.
+- Every `Coaching` from Nemotron carries `usage: { inputTokens, outputTokens, costUsd }`. Token Factory reports tokens only, so the cost is looked up from two constants in `lib/usage.ts`: $0.06 per 1M input tokens and $0.24 per 1M output tokens for `nvidia/Nemotron-3_5-Lightning`, from the Token Factory model endpoints page, checked 2026-09-26.
+- The page counts every answer `getMove` resolves (live flying, the health check, and the judge's replays and calm-moment checks through `replayMove`) and every reply `getCoaching` resolves, into a session total held in a ref. A 500 ms ticker copies it into state, so the panel updates without re-rendering on every one of Jev's four-a-second answers. The total resets only on reload.
+- `scripts/learn.ts`, `scripts/sim.ts` and `scripts/coach-bench.ts` keep the same total headless and print it when they finish: Jev's answers, cached answers, tokens and cost; Nemotron's calls, tokens and cost; the combined cost. `learn.ts` also prints the cost per run.
 
 ## Data Model
 All in page memory.
@@ -161,6 +168,7 @@ lib/
   learn/judge.ts           # reproduce, coach, test, keep or throw out
   system1/{types,jev,fake,cache,index}.ts
   system2/coach.ts         # Nemotron rule writer   [replaces planner.ts]
+  usage.ts                 # token/cost accounting shared by the page and the scripts
 scripts/
   world-check.ts           # shooter rules, cloning, determinism
   replay-test.ts           # a death replays exactly; a rule flips it   [replaces plan-test]

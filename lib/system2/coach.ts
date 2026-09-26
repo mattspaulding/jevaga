@@ -1,6 +1,7 @@
 import type { HitBy } from "../game/world";
 import type { Asked } from "../learn/recorder";
 import { MAX_RULE_LENGTH, MAX_RULES } from "../system1/types";
+import { nemotronCost } from "../usage";
 
 // Nemotron on Nebius Token Factory is the coach: after each of Jev's deaths it
 // reads what Jev saw and picked in the last second or so and writes one rule.
@@ -19,7 +20,12 @@ export type CoachInput = {
 };
 
 export type Change = { kind: "add" } | { kind: "replace"; n: number } | { kind: "none" };
-export type Coaching = { happened: string; change: Change; rule: string | null };
+export type Coaching = {
+  happened: string;
+  change: Change;
+  rule: string | null;
+  usage?: { inputTokens: number; outputTokens: number; costUsd: number };
+};
 
 const SYSTEM = `You coach a fast pilot model flying a ship in a real-time space shooter. About four times a second the pilot reads a short description of the fight and picks one move: left, right, stay or fire. It follows written rules. It has just been hit. You get what it read and what it picked in the last second or so before the hit.
 
@@ -113,7 +119,12 @@ export async function writeRule(input: CoachInput): Promise<Coaching> {
   });
   const body = await res.json().catch(() => null);
   if (!res.ok) throw new CoachError(`Token Factory returned ${res.status}`);
-  return parseCoaching(body?.choices?.[0], input.rules.length);
+  const coaching = parseCoaching(body?.choices?.[0], input.rules.length);
+  // Token Factory reports tokens, not a price; the price is looked up, not guessed.
+  const usage = body?.usage;
+  const inputTokens = typeof usage?.prompt_tokens === "number" ? usage.prompt_tokens : 0;
+  const outputTokens = typeof usage?.completion_tokens === "number" ? usage.completion_tokens : 0;
+  return { ...coaching, usage: { inputTokens, outputTokens, costUsd: nemotronCost(inputTokens, outputTokens) } };
 }
 
 export function parseCoaching(

@@ -14,6 +14,6 @@ export const fake: System1 = {
     if (soon(moves.stay)) move = !soon(moves.left) && !/Can't/.test(moves.left) ? "left" : "right";
     else if (/shot reaches/.test(moves.fire)) move = "fire";
     const probabilities = Object.fromEntries(MOVES.map((m) => [m, m === move ? 0.85 : 0.05])) as Record<Move, number>;
-    return { move, probabilities, confidence: 0.85 - 0.05, source: "simulated" };
+    return { move, probabilities, confidence: 0.85 - 0.05, source: "simulated", usage: { inputTokens: 0, outputTokens: 0, costUsd: 0 } };
   },
 };

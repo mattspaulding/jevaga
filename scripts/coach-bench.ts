@@ -7,10 +7,11 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { driveWithJev, startRun } from "../lib/game/loop";
 import { createRecorder, type Death } from "../lib/learn/recorder";
-import { paced, replay } from "../lib/learn/replay";
+import { paced, replay, type Decide } from "../lib/learn/replay";
 import { newWorld, resetRun } from "../lib/game/world";
 import { system1 } from "../lib/system1";
 import { writeRule, type Coaching } from "../lib/system2/coach";
+import { addCoachCall, addJevAnswer, emptyUsage, summarizeUsage } from "../lib/usage";
 
 const args = process.argv.slice(2).filter((a) => a !== "--");
 const file = args[0] ?? "deaths.json";
@@ -20,7 +21,23 @@ const REFERENCE = "Never pick a move whose description shows a bullet or diver a
 
 const withTimeout = <T>(p: Promise<T>, signal: AbortSignal) =>
   Promise.race([p, new Promise<T>((_, reject) => signal.addEventListener("abort", () => reject(new Error("timeout"))))]);
-const decide = paced((input) => system1().decide(input));
+
+// Every Jev answer and every coach reply, across collecting deaths and scoring
+// rules, lands in `usage` for the totals printed at the end.
+const usage = emptyUsage();
+const decideRaw: Decide = (input) =>
+  system1()
+    .decide(input)
+    .then((d) => {
+      addJevAnswer(usage, d.usage);
+      return d;
+    });
+const decide = paced(decideRaw);
+const coach: typeof writeRule = (input) =>
+  writeRule(input).then((c) => {
+    addCoachCall(usage, c.usage);
+    return c;
+  });
 
 async function collect(): Promise<Death[]> {
   if (existsSync(file)) return JSON.parse(readFileSync(file, "utf8"));
@@ -31,7 +48,7 @@ async function collect(): Promise<Death[]> {
     const run = startRun(resetRun(base));
     const [end] = await Promise.all([
       run.done,
-      driveWithJev(run, (input, signal) => withTimeout(system1().decide(input), signal), {
+      driveWithJev(run, (input, signal) => withTimeout(decideRaw(input), signal), {
         rules: () => [],
         onAsk: rec.onAsk,
         onAskFailed: rec.onAskFailed,
@@ -80,7 +97,7 @@ async function main() {
       const t0 = Date.now();
       let c: Coaching;
       try {
-        c = await writeRule({ asked: d.asked, tHit: d.tHit, hitBy: d.hitBy, rules: [] });
+        c = await coach({ asked: d.asked, tHit: d.tHit, hitBy: d.hitBy, rules: [] });
       } catch (e) {
         console.log(`  death ${i + 1}: coach failed (${e instanceof Error ? e.message : e})`);
         continue;
@@ -100,6 +117,7 @@ async function main() {
       `  → ${rules} rules; ${ownPass} saved the death they were written for; on average each saved ${(general / Math.max(1, rules)).toFixed(1)} of the other ${deaths.length - 1}; ${(ms / Math.max(1, rules) / 1000).toFixed(1)} s per rule\n`,
     );
   }
+  console.log(summarizeUsage(usage));
   process.exit(0);
 }
 main();

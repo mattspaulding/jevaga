@@ -78,6 +78,10 @@ Source: `scope.md > Inspiration & Identity`, `design-handoff.md`, the "Jevaga sp
 ### Runs
 - [ ] Each run is listed with who flew it, its score, its kills, and how many rules Jev had; the best is marked.
 
+### Usage
+- The panel keeps a running count for the session: how many times Jev has answered (and how many of those were free repeats), how many rules Nemotron has written, the tokens behind each, and what each has cost in dollars, plus the combined total.
+- [ ] The USAGE window shows Jev's and Nemotron's answer counts, tokens and cost, and the combined total.
+
 ## States and Boundaries
 - **Before Start:** formation shown still, ship at the bottom center, empty run list, empty rulebook ("Empty. Jev starts on reflexes alone.").
 - **Studying and replaying:** the pause between Jev runs lasts as long as the coach and the replays take: under 10 seconds while few deaths are fixed, 20 to 45 seconds once many are. The COACH window says what's happening ("testing earlier death 3 of 7"). Stop ends it.

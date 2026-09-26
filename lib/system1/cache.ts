@@ -17,7 +17,8 @@ export function cached(inner: System1): System1 {
         cacheStats.hits++;
         answers.delete(key);
         answers.set(key, hit); // most recently used goes last
-        return hit;
+        // Still Jev's answer; only the network call was saved, so it's free.
+        return { ...hit, usage: { inputTokens: 0, outputTokens: 0, costUsd: 0, cached: true } };
       }
       cacheStats.misses++;
       const decision = await inner.decide(input);

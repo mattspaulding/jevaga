@@ -4,6 +4,7 @@ import type { RunEnd } from "@/lib/game/loop";
 import { MOVES, type Move } from "@/lib/game/world";
 import type { Book, JudgeStep, Verdict } from "@/lib/learn/judge";
 import type { Decision } from "@/lib/system1/types";
+import { formatTokens, formatUsd, totalCostUsd, type Usage } from "@/lib/usage";
 
 export type Status = "idle" | "starting" | "running" | "retrying" | "between" | "stopped" | "error";
 export type Mode = "jev" | "you";
@@ -279,6 +280,38 @@ export function RulebookBox({ book, fresh }: { book: Book; fresh: number | null 
       ) : (
         <p className="ruleEmpty">Empty. Jev starts on reflexes alone.</p>
       )}
+    </section>
+  );
+}
+
+// Token counts and dollar cost for the session so far, reset only on reload.
+export function UsageBox({ usage }: { usage: Usage }) {
+  const { jev, nemotron } = usage;
+  return (
+    <section className="win winNeutral" aria-label="Usage this session">
+      <h2>USAGE · THIS SESSION</h2>
+      <ul className="usageList">
+        <li className="usageRow">
+          <span className="usageLabel usageJev">JEV</span>
+          <span className="usageCount">
+            {jev.answers.toLocaleString()} {jev.answers === 1 ? "answer" : "answers"} · {jev.cached.toLocaleString()} cached
+          </span>
+          <span className="usageTokens">{formatTokens(jev.inputTokens + jev.outputTokens)} tokens</span>
+          <span className="usageCost">{formatUsd(jev.costUsd)}</span>
+        </li>
+        <li className="usageRow">
+          <span className="usageLabel usageCoach">NEMOTRON</span>
+          <span className="usageCount">
+            {nemotron.calls.toLocaleString()} {nemotron.calls === 1 ? "rule" : "rules"} asked
+          </span>
+          <span className="usageTokens">{formatTokens(nemotron.inputTokens + nemotron.outputTokens)} tokens</span>
+          <span className="usageCost">{formatUsd(nemotron.costUsd)}</span>
+        </li>
+        <li className="usageRow usageTotal">
+          <span className="usageLabel">TOTAL</span>
+          <span className="usageTotalCost">{formatUsd(totalCostUsd(usage))}</span>
+        </li>
+      </ul>
     </section>
   );
 }

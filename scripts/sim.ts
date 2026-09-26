@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 import { driveWithJev, startRun } from "../lib/game/loop";
 import { MOVES, newWorld, resetRun, type Move } from "../lib/game/world";
 import { system1 } from "../lib/system1";
+import { addJevAnswer, emptyUsage, summarizeUsage } from "../lib/usage";
 
 // pnpm passes the "--" through; skip it.
 const args = process.argv.slice(2).filter((a) => a !== "--");
@@ -24,6 +25,7 @@ const withTimeout = <T>(p: Promise<T>, signal: AbortSignal) =>
 async function main() {
   console.log(`seed ${seed}, ${rules.length} rules`);
   const base = newWorld(seed);
+  const usage = emptyUsage();
   for (let n = 1; n <= runs; n++) {
     const run = startRun(resetRun(base));
     const counts = Object.fromEntries(MOVES.map((m) => [m, 0])) as Record<Move, number>;
@@ -36,6 +38,7 @@ async function main() {
         onDecision: (d) => {
           counts[d.move]++;
           times.push(d.ms ?? 0);
+          addJevAnswer(usage, d.usage);
         },
         onPause: () => pauses++,
       }),
@@ -47,6 +50,7 @@ async function main() {
       `Run ${n}: score ${end.score} in ${end.seconds.toFixed(1)} s (wave ${run.world.wave}, ${run.world.kills} kills, hit by a ${hit?.by ?? "?"}) · moves ${MOVES.map((m) => `${m} ${counts[m]}`).join(", ")} · avg answer ${avg} ms · ${pauses} outage pauses`,
     );
   }
+  console.log("\n" + summarizeUsage(usage));
   process.exit(0);
 }
 main();

@@ -33,11 +33,21 @@ export const jev: System1 = {
     if (!MOVES.includes(move) || !p || MOVES.some((m) => typeof p[m] !== "number") || typeof answer.confidence !== "number")
       throw new JevError("Jev's answer was missing a valid move, probabilities or confidence");
 
+    // usage.{input,output}_tokens and provider_metadata.gateway.cost (a dollar
+    // string, the exact charge for this call) are measured, not derived. Any
+    // of them can be missing; that's 0 usage, never a thrown error.
+    const usage = body?.usage;
+    const inputTokens = typeof usage?.input_tokens === "number" ? usage.input_tokens : 0;
+    const outputTokens = typeof usage?.output_tokens === "number" ? usage.output_tokens : 0;
+    const gatewayCost = body?.provider_metadata?.gateway?.cost;
+    const costUsd = typeof gatewayCost === "string" || typeof gatewayCost === "number" ? Number(gatewayCost) || 0 : 0;
+
     return {
       move,
       probabilities: Object.fromEntries(MOVES.map((m) => [m, p[m]])) as Record<Move, number>,
       confidence: answer.confidence,
       source: "jev",
+      usage: { inputTokens, outputTokens, costUsd },
     };
   },
 };

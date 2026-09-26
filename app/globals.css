@@ -375,6 +375,66 @@ body {
   color: var(--muted);
 }
 
+/* ---------- USAGE window ---------- */
+
+.usageList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.usageRow {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+.usageLabel {
+  flex: none;
+  width: 80px;
+  font: 700 14px var(--font-pixel);
+  letter-spacing: 0.06em;
+}
+.usageJev {
+  color: var(--jev-hi);
+}
+.usageCoach {
+  color: var(--coach-hi);
+}
+.usageCount {
+  flex: 1;
+  font: 400 14px var(--font-pixel);
+  color: var(--ink);
+}
+.usageTokens {
+  flex: none;
+  width: 88px;
+  text-align: right;
+  font: 400 18px var(--font-num);
+  color: var(--muted);
+}
+.usageCost {
+  flex: none;
+  width: 78px;
+  text-align: right;
+  font: 400 18px var(--font-num);
+  color: var(--ink);
+}
+.usageTotal {
+  margin-top: 2px;
+  padding-top: 6px;
+  border-top: 2px solid var(--ink);
+}
+.usageTotal .usageLabel {
+  color: var(--gold);
+}
+.usageTotalCost {
+  margin-left: auto;
+  font: 400 20px var(--font-num);
+  color: var(--gold);
+}
+
 /* ---------- YOU window ---------- */
 
 .youRow {

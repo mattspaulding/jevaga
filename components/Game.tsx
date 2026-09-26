@@ -10,6 +10,7 @@ import {
   RulebookBox,
   RunHistory,
   StatusChip,
+  UsageBox,
   YouBox,
   type Mode,
   type RunRow,
@@ -24,6 +25,7 @@ import { createRecorder, type Death } from "@/lib/learn/recorder";
 import { paced, playback, type ReplayResult } from "@/lib/learn/replay";
 import type { DecideInput, Decision } from "@/lib/system1/types";
 import type { CoachInput, Coaching } from "@/lib/system2/coach";
+import { addCoachCall, addJevAnswer, emptyUsage, type Usage } from "@/lib/usage";
 
 const PAUSE_BETWEEN_RUNS_MS = 1500;
 const REPLAY_BANNER_MS = 1800; // how long "REPLAY · SURVIVED" stays up before the next run
@@ -35,10 +37,28 @@ async function post<T>(url: string, body: unknown, signal?: AbortSignal): Promis
   if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
   return json as T;
 }
-const getMove = (input: DecideInput, signal?: AbortSignal) => post<Decision>("/api/move", input, signal);
+
+// The session's running token/cost totals. A ref, not state: every Jev answer
+// and coach reply lands here (live flying, replays, calm-moment checks), and a
+// slow ticker copies it into state so the panel updates without re-rendering
+// the page four times a second.
+const usageRef = { current: emptyUsage() };
+
+// getMove is the one path every Jev answer takes: driveWithJev's live flying,
+// the health-check probe, and replayMove (the judge's replays and calm-moment
+// checks) all call it, so counting here counts all of them once each.
+const getMove = (input: DecideInput, signal?: AbortSignal) =>
+  post<Decision>("/api/move", input, signal).then((d) => {
+    addJevAnswer(usageRef.current, d.usage);
+    return d;
+  });
 // Replays share one queue: at most 4 questions a second, retried twice on failure.
 const replayMove = paced((input) => getMove(input, AbortSignal.timeout(10_000)));
-const getCoaching = (input: CoachInput) => post<Coaching>("/api/coach", input);
+const getCoaching = (input: CoachInput) =>
+  post<Coaching>("/api/coach", input).then((c) => {
+    addCoachCall(usageRef.current, c.usage);
+    return c;
+  });
 
 const KEYS: Record<string, Move> = { ArrowLeft: "left", a: "left", ArrowRight: "right", d: "right", " ": "fire" };
 
@@ -77,6 +97,16 @@ export default function Game() {
   const runId = useRef(0);
   const runCount = useRef(0);
   const running = status === "running" || status === "starting" || status === "retrying" || status === "between";
+
+  // Session token/cost totals for the USAGE window. usageRef (declared above,
+  // outside the component) is where getMove and getCoaching actually count;
+  // this just copies it into state a few times a second, so the panel updates
+  // without re-rendering on every one of Jev's four-a-second answers.
+  const [usage, setUsage] = useState<Usage>(usageRef.current);
+  useEffect(() => {
+    const id = setInterval(() => setUsage({ jev: { ...usageRef.current.jev }, nemotron: { ...usageRef.current.nemotron } }), 500);
+    return () => clearInterval(id);
+  }, []);
 
   // "You" mode: holding ← → (A D) glides the ship smoothly; letting go stops
   // it. Space fires, and holding it keeps firing as fast as the gun reloads.
@@ -344,6 +374,7 @@ export default function Game() {
           seed={seed}
           live={status === "running" || status === "starting" || status === "retrying" ? { n: runs.length + 1, who: mode } : null}
         />
+        <UsageBox usage={usage} />
         <Controls
           status={status}
           onStart={start}
