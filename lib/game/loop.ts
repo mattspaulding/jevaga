@@ -110,3 +110,36 @@ export async function driveWithJev(
     hooks.onDecision({ ...decision, ms: Math.round(performance.now() - sent) });
   }
 }
+
+// Nemotron plans: every PLAN_EVERY_MS during a run, send the whole fight and
+// swap in the plan that comes back. A failed or late plan leaves Jev flying
+// on the last one; the fight never waits for the strategist.
+export const PLAN_EVERY_MS = 3000;
+export async function drivePlanner(
+  run: Run,
+  getPlan: (input: { state: string; plan: string; recentMoves: Move[]; seconds: number }) => Promise<{ plan: string }>,
+  hooks: {
+    plan: () => string;
+    recentMoves: () => Move[];
+    onPlan: (plan: string) => void;
+    onStale: () => void;
+  },
+): Promise<void> {
+  while (!run.ended()) {
+    const started = performance.now();
+    try {
+      const { plan } = await getPlan({
+        state: describeFight(run.world),
+        plan: hooks.plan(),
+        recentMoves: hooks.recentMoves(),
+        seconds: run.world.t,
+      });
+      if (run.ended()) break;
+      hooks.onPlan(plan);
+    } catch {
+      if (run.ended()) break;
+      hooks.onStale();
+    }
+    await sleepUnless(PLAN_EVERY_MS - (performance.now() - started), run.ended);
+  }
+}

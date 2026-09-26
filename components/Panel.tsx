@@ -68,7 +68,7 @@ export function DecisionBox({ decision, status }: { decision: Decision | null; s
   );
 }
 
-// Nemotron's plan: Jev's instructions. Live plans arrive in slice 6.
+// Nemotron's plan: Jev's instructions, rewritten every few seconds during a run.
 export function PlanBox({ plan, age, stale }: { plan: string; age: number | null; stale: boolean }) {
   return (
     <section className="box coach" aria-label="Nemotron plan">

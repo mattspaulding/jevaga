@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import GameCanvas from "@/components/GameCanvas";
 import { Controls, DecisionBox, ModeSwitch, PlanBox, RunHistory, StatusChip, YouBox, type Mode, type RunRow, type Status } from "@/components/Panel";
 import { describeFight, describeMoves } from "@/lib/describe";
-import { driveWithJev, startRun, type Run, type RunEnd } from "@/lib/game/loop";
+import { drivePlanner, driveWithJev, startRun, type Run, type RunEnd } from "@/lib/game/loop";
 import { randomSeed } from "@/lib/game/rng";
 import { newWorld, resetRun, type Move, type World } from "@/lib/game/world";
 import { STARTING_PLAN, type DecideInput, type Decision } from "@/lib/system1/types";
@@ -19,6 +19,8 @@ async function post<T>(url: string, body: unknown, signal?: AbortSignal): Promis
   return json as T;
 }
 const getMove = (input: DecideInput, signal?: AbortSignal) => post<Decision>("/api/move", input, signal);
+const getPlan = (input: { state: string; plan: string; recentMoves: Move[]; seconds: number }) =>
+  post<{ plan: string }>("/api/plan", input);
 
 const KEYS: Record<string, Move> = { ArrowLeft: "left", a: "left", ArrowRight: "right", d: "right", " ": "fire" };
 
@@ -41,14 +43,24 @@ export default function Game() {
   const [error, setError] = useState<string | null>(null);
   const [decision, setDecision] = useState<Decision | null>(null);
   const [lastKey, setLastKey] = useState<Move | null>(null);
-  const [plan] = useState(STARTING_PLAN);
+  const [plan, setPlan] = useState(STARTING_PLAN);
   const planRef = useRef(plan);
+  const [planAt, setPlanAt] = useState<number | null>(null); // when the current plan arrived (ms)
+  const [planStale, setPlanStale] = useState(false);
+  const [now, setNow] = useState(() => performance.now());
+  const recentMoves = useRef<Move[]>([]);
   const [runs, setRuns] = useState<RunRow[]>([]);
   // Each Start gets a run id; Stop bumps it, so an older loop still awaiting
   // something sees it has been stopped and never touches the page again.
   const runId = useRef(0);
   const runCount = useRef(0);
   const running = status === "running" || status === "starting" || status === "retrying" || status === "between";
+
+  // Tick once a second so the plan's age stays current.
+  useEffect(() => {
+    const id = setInterval(() => setNow(performance.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
 
   // ← → / A D move, Space fires, instantly, in "You" mode.
   useEffect(() => {
@@ -122,11 +134,13 @@ export default function Game() {
         setDecision(null);
         setStatus("running");
         const run = newRun();
+        recentMoves.current = [];
         const [end] = await Promise.all([
           run.done,
           driveWithJev(run, getMove, {
             plan: () => planRef.current,
             onDecision: (d) => {
+              recentMoves.current = [...recentMoves.current.slice(-7), d.move];
               if (!stopped()) setDecision(d);
             },
             onPause: () => {
@@ -134,6 +148,20 @@ export default function Game() {
             },
             onResume: () => {
               if (!stopped()) setStatus("running");
+            },
+          }),
+          drivePlanner(run, getPlan, {
+            plan: () => planRef.current,
+            recentMoves: () => recentMoves.current,
+            onPlan: (p) => {
+              if (stopped()) return;
+              planRef.current = p;
+              setPlan(p);
+              setPlanAt(performance.now());
+              setPlanStale(false);
+            },
+            onStale: () => {
+              if (!stopped()) setPlanStale(true);
             },
           }),
         ]);
@@ -171,7 +199,7 @@ export default function Game() {
         {mode === "jev" ? (
           <>
             <DecisionBox decision={decision} status={status} />
-            <PlanBox plan={plan} age={null} stale={false} />
+            <PlanBox plan={plan} age={planAt === null ? null : Math.max(0, (now - planAt) / 1000)} stale={planStale} />
           </>
         ) : (
           <YouBox lastKey={lastKey} />
