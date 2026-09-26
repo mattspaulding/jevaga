@@ -2,12 +2,28 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import GameCanvas from "@/components/GameCanvas";
-import { Controls, DecisionBox, ModeSwitch, RunHistory, StatusChip, YouBox, type Mode, type RunRow, type Status } from "@/components/Panel";
+import {
+  CoachBox,
+  Controls,
+  DecisionBox,
+  ModeSwitch,
+  RulebookBox,
+  RunHistory,
+  StatusChip,
+  YouBox,
+  type Mode,
+  type RunRow,
+  type Status,
+} from "@/components/Panel";
 import { describeFight, describeMoves } from "@/lib/describe";
 import { driveWithJev, startRun, type Run, type RunEnd } from "@/lib/game/loop";
 import { randomSeed } from "@/lib/game/rng";
 import { newWorld, resetRun, type Move, type World } from "@/lib/game/world";
+import { afterDeath, Cancelled, emptyBook, type Book, type JudgeStep, type Verdict } from "@/lib/learn/judge";
+import { createRecorder } from "@/lib/learn/recorder";
+import { paced } from "@/lib/learn/replay";
 import type { DecideInput, Decision } from "@/lib/system1/types";
+import type { CoachInput, Coaching } from "@/lib/system2/coach";
 
 const PAUSE_BETWEEN_RUNS_MS = 1500;
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -19,6 +35,9 @@ async function post<T>(url: string, body: unknown, signal?: AbortSignal): Promis
   return json as T;
 }
 const getMove = (input: DecideInput, signal?: AbortSignal) => post<Decision>("/api/move", input, signal);
+// Replays share one queue: at most 4 questions a second, retried twice on failure.
+const replayMove = paced((input) => getMove(input, AbortSignal.timeout(10_000)));
+const getCoaching = (input: CoachInput) => post<Coaching>("/api/coach", input);
 
 const KEYS: Record<string, Move> = { ArrowLeft: "left", a: "left", ArrowRight: "right", d: "right", " ": "fire" };
 
@@ -41,8 +60,13 @@ export default function Game() {
   const [error, setError] = useState<string | null>(null);
   const [decision, setDecision] = useState<Decision | null>(null);
   const [lastKey, setLastKey] = useState<Move | null>(null);
-  // Jev's rulebook. Empty until the coach (slice 9) starts earning rules from deaths.
-  const rulesRef = useRef<string[]>([]);
+  // Jev's rulebook, the deaths it learned from, and the calm moments that check a rule leaves it shooting.
+  const [book, setBook] = useState<Book>(emptyBook);
+  const bookRef = useRef<Book>(book);
+  const [judgeStep, setJudgeStep] = useState<JudgeStep | null>(null);
+  const [verdict, setVerdict] = useState<Verdict | null>(null);
+  const [judgedRun, setJudgedRun] = useState<number | null>(null);
+  const [freshRule, setFreshRule] = useState<number | null>(null);
   const [runs, setRuns] = useState<RunRow[]>([]);
   const [banner, setBanner] = useState<string | null>(null); // "HIT · RUN 4 OVER", shown until the next run starts
   // Each Start gets a run id; Stop bumps it, so an older loop still awaiting
@@ -107,12 +131,13 @@ export default function Game() {
     return run;
   }, [base]);
 
-  const finishRun = useCallback((end: RunEnd, who: Mode) => {
+  const finishRun = useCallback((end: RunEnd, who: Mode, kills: number, rules: number | null) => {
     runCount.current += 1;
     const n = runCount.current;
     hitRef.current = true;
     setBanner(`HIT · RUN ${n} OVER`);
-    setRuns((rs) => [...rs, { ...end, n, who }]);
+    setRuns((rs) => [...rs, { ...end, n, who, kills, rules }]);
+    return n;
   }, []);
 
   // You: one run; the fight moves on its own and your keys fly the ship.
@@ -123,7 +148,7 @@ export default function Game() {
       const run = newRun();
       const end = await run.done;
       if (stopped()) return;
-      if (end) finishRun(end, "you");
+      if (end) finishRun(end, "you", run.world.kills, null);
       setStatus("stopped");
     },
     [newRun, finishRun],
@@ -137,7 +162,7 @@ export default function Game() {
       const probe = resetRun(base);
       for (let tries = 1; ; tries++) {
         try {
-          await getMove({ state: describeFight(probe), moves: describeMoves(probe), rules: rulesRef.current });
+          await getMove({ state: describeFight(probe), moves: describeMoves(probe), rules: bookRef.current.rules });
           if (stopped()) return;
           break;
         } catch (e) {
@@ -155,11 +180,16 @@ export default function Game() {
         setDecision(null);
         setStatus("running");
         const run = newRun();
+        const rec = createRecorder();
+        const rules = [...bookRef.current.rules]; // the rulebook stays fixed for the whole run
         const [end] = await Promise.all([
           run.done,
           driveWithJev(run, getMove, {
-            rules: () => rulesRef.current,
+            rules: () => rules,
+            onAsk: rec.onAsk,
+            onAskFailed: rec.onAskFailed,
             onDecision: (d) => {
+              rec.onDecision(d);
               if (!stopped()) setDecision(d);
             },
             onPause: () => {
@@ -171,8 +201,42 @@ export default function Game() {
           }),
         ]);
         if (!end || stopped()) return;
-        finishRun(end, "jev");
+        const n = finishRun(end, "jev", run.world.kills, rules.length);
         setStatus("between");
+
+        // Learn from the death: reproduce it, ask Nemotron for a rule, test it on replays.
+        const controls = [...bookRef.current.controls];
+        for (const c of rec.controls()) if (controls.length < 5) controls.push(c);
+        bookRef.current = { ...bookRef.current, controls };
+        const death = rec.toDeath(n, run.world);
+        if (death) {
+          setJudgedRun(n);
+          setVerdict(null);
+          try {
+            const v = await afterDeath(death, bookRef.current, {
+              decide: replayMove,
+              coach: getCoaching,
+              onStep: (s) => {
+                if (!stopped()) setJudgeStep(s);
+              },
+              cancelled: stopped,
+            });
+            if (stopped()) return;
+            bookRef.current = v.book;
+            setBook(v.book);
+            setJudgeStep(null);
+            setVerdict(v);
+            const kept = v.kind === "kept" ? v.attempts.at(-1)?.coaching : undefined;
+            if (kept) {
+              setFreshRule(kept.change.kind === "replace" ? kept.change.n - 1 : v.book.rules.length - 1);
+              setTimeout(() => setFreshRule(null), 1200);
+            }
+          } catch (e) {
+            if (e instanceof Cancelled || stopped()) return;
+            setJudgeStep(null);
+            setError(e instanceof Error ? e.message : String(e));
+          }
+        }
         await sleep(PAUSE_BETWEEN_RUNS_MS);
       }
     },
@@ -189,7 +253,17 @@ export default function Game() {
   const stop = useCallback(() => {
     runId.current++;
     runRef.current?.stop();
+    setJudgeStep(null);
     setStatus("stopped");
+  }, []);
+
+  // Start over: an empty rulebook and no saved deaths.
+  const forget = useCallback(() => {
+    const b = emptyBook();
+    bookRef.current = b;
+    setBook(b);
+    setVerdict(null);
+    setJudgedRun(null);
   }, []);
 
   return (
@@ -200,11 +274,13 @@ export default function Game() {
           <h1 className="title">JEVAGA</h1>
           <StatusChip status={status} error={error} />
         </div>
-        <p className="tagline">Jev flies the ship four times a second, on reflexes alone.</p>
+        <p className="tagline">Jev flies the ship four times a second. After each death, Nemotron writes it one rule, and a replay of the death decides whether the rule stays.</p>
         <ModeSwitch mode={mode} onChange={setMode} disabled={running} />
         {mode === "jev" ? (
           <>
             <DecisionBox decision={decision} status={status} />
+            <CoachBox step={judgeStep} verdict={verdict} run={judgedRun} />
+            <RulebookBox book={book} fresh={freshRule} />
           </>
         ) : (
           <YouBox lastKey={lastKey} />
@@ -214,7 +290,13 @@ export default function Game() {
           seed={seed}
           live={status === "running" || status === "starting" || status === "retrying" ? { n: runs.length + 1, who: mode } : null}
         />
-        <Controls status={status} onStart={start} onStop={stop} />
+        <Controls
+          status={status}
+          onStart={start}
+          onStop={stop}
+          onForget={mode === "jev" ? forget : undefined}
+          canForget={book.rules.length > 0 || book.deaths.length > 0}
+        />
       </aside>
     </main>
   );

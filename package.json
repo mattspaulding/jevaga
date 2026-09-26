@@ -9,7 +9,9 @@
     "lint": "eslint",
     "world-check": "tsx scripts/world-check.ts",
     "replay-test": "tsx --env-file=.env.local scripts/replay-test.ts",
-    "sim": "tsx --env-file=.env.local scripts/sim.ts"
+    "sim": "tsx --env-file=.env.local scripts/sim.ts",
+    "learn": "tsx --env-file=.env.local scripts/learn.ts",
+    "coach-bench": "tsx --env-file=.env.local scripts/coach-bench.ts"
   },
   "dependencies": {
     "next": "16.3.6",

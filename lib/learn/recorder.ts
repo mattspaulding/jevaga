@@ -35,6 +35,7 @@ export type Death = {
   schedule: Beat[]; // every question from `start` on, answered or not
   rules: string[]; // the rulebook Jev had
   status: "new" | "fixed" | "luck" | "unsolved";
+  happened?: string; // the coach's one-line account, once judged
 };
 
 // A calm moment where firing was right: nothing arriving, an enemy above, the

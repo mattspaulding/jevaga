@@ -88,23 +88,23 @@ Unchanged: `pnpm dev`, open http://localhost:3000 (`?seed=N` optional), keys in 
 
 ### The coach (System 2)
 `lib/system2/coach.ts`, `app/api/coach/route.ts`. PRD ref: `prd.md > Jev learns from its deaths (System 2)`.
-- Nemotron 3.5 Lightning on Token Factory, thinking off to start, `max_tokens` 300, `temperature` 0.3, 15 s timeout. Whether thinking on writes better rules is measured in the build (see Decisions and Open Issues).
-- Input, as prose: for each question in `death.asked`, oldest first, how long before the hit it was asked, what Jev read (`state`), its four options (`moves`), and what it picked with its probability; then what hit the ship and from where; then the rulebook, numbered, or "The rulebook is empty." On a retry, add the rule that failed and what happened in its replay ("Jev picked left at 0.6 s before the hit and a bullet hit it at x 3.1").
+- Nemotron 3.5 Lightning on Token Factory, thinking off, `max_tokens` 300, `temperature` 0.3, 15 s timeout. Thinking on was measured with `scripts/coach-bench.ts` and was worse (see Decisions and Open Issues); `COACH_THINKING=on` still switches it on for experiments.
+- Input, as prose: for each question in `death.asked`, oldest first, how long before the hit it was asked, what Jev read (`state`), its four options (`moves`), and what it picked with its probability, plus a hindsight line (which options had nothing arriving for at least 1 s, and what was arriving on the one it picked, read from the options' own text); then what hit the ship and from where; then the rulebook, numbered, or "The rulebook is empty." On a retry, add the rule that failed and what happened in its replay ("Jev picked left at 0.6 s before the hit and a bullet hit it at x 3.1").
 - Output, exactly three lines:
   ```
   What happened: <one sentence>
   Change: add | replace <n> | none
   Rule: <one sentence, 30 words or fewer; blank when Change is none>
   ```
-- The prompt asks for a rule written as a situation and what to do about it, never one that stops Jev firing when nothing is arriving, using the words in the description ("bullet in", "diver", "turning toward you", "falling straight", "edge", "glide", "stop"). No positions that only fit this death, no timing finer than the description gives, and "none" when nothing Jev read could have saved it. Parsed tolerantly; `</think>` stripped. A reply that names a rule number that doesn't exist, or adds when the book is full (8 rules), counts as a failed attempt.
+- The prompt first explains what hits the ship (stopping, staying or firing where something arrives; an option reading "bullet in 0.3 s" gets hit in 0.3 s), then asks for a rule written as a situation and what to do about it, never one that stops Jev firing when nothing is arriving, naming left or right only when tied to what the description shows on that side, using the words in the description ("bullet in", "diver", "turning toward you", "falling straight", "edge", "glide", "stop"). No positions that only fit this death, no timing finer than the description gives, and "none" when nothing Jev read could have saved it. Parsed tolerantly; `</think>` stripped. "Replace n" beyond the end of a rulebook with room is read as add. A reply that replaces a rule that doesn't exist in a full book, adds when the book is full (8 rules), or echoes the reply template counts as a failed attempt.
 
 ### The judge
 `lib/learn/judge.ts`. PRD ref: `prd.md > Jev learns from its deaths (System 2)`.
 - A recorded death starts as `new`. `afterDeath(death, book)`, where `book` holds `rules`, `deaths` (each saved death with its status: `fixed`, `luck` or `unsolved`) and `controls`:
   1. Reproduce with `death.rules`. Survived → status `luck`, done. Untested → no rule this time, and the death is not saved.
   2. Coach → candidate rules (at most one add, replace or none).
-  3. Replay this death with the candidate. Then replay the 8 most recent `fixed` deaths with it, one at a time. Then ask the control moments with it: Jev must pick fire in at least 4 of 5 (every one if fewer are saved).
-  4. All passed → keep the candidate; this death becomes `fixed`. Otherwise one retry of 2 and 3 with the replay's result. Still failing → rules unchanged, this death is `unsolved`.
+  3. Replay this death with the candidate. Then replay the 8 most recent `fixed` deaths with it, one at a time. Then ask the control moments with it: Jev must fire in at least as many of them as it does with the current rules.
+  4. All passed → keep the candidate; this death becomes `fixed`. Otherwise one retry of 2 and 3 with the replay's result. Still failing → rules unchanged, this death is `unsolved`. A coach call that fails (a timeout or a garbled reply) gets one extra call without using up a test; Token Factory occasionally took 12 to 15 s instead of about 1 s in testing.
 - Returns every step's result for the panel and for `scripts/learn.ts`.
 - Every replay question goes through one shared limiter at 4 a second, the rate the gateway held clean in testing. A 429 is retried with backoff twice before a replay counts as untested.
 - Time and cost: a replay is about 10 questions, about 2.5 s and $0.0002. With 8 fixed deaths a test is about 90 questions, about 25 s and $0.002, and a retry doubles it. A coach call is 1 to 3 s and about $0.0005. The COACH window shows progress while it runs.
@@ -164,6 +164,7 @@ lib/
 scripts/
   world-check.ts           # shooter rules, cloning, determinism
   replay-test.ts           # a death replays exactly; a rule flips it   [replaces plan-test]
+  coach-bench.ts           # coach variants scored on the same saved deaths
   learn.ts                 # headless learning runs with real models    [replaces sim live mode]
   sim.ts                   # headless runs with a fixed rulebook
 ```
@@ -197,7 +198,8 @@ Unchanged: Jev at `POST https://ai-gateway.vercel.sh/typesafe/v1/systemone` (pai
 
 **Measured in slice 8 (real Jev, seed 5, 5 deaths):** with no rules at all, Jev scored 600 to 7,400 and lasted 4 to 74 s. On the recorded schedule every death retraced to the exact step and died again when Jev was asked again; the hand-written rule "Never pick a move whose description shows a bullet or diver arriving within 0.6 s." turned 5 of 5 into survivals, and Jev still fired in 5 of 5 calm moments with it.
 
+**Measured in slice 9 (coach bench, 8 real deaths of a Jev with no rules, seed 5):** the hand-written reference rule saves 6 of 8. The first coach prompt wrote rules tied to one death ("glide right", "5 rows up") or wrong about the game ("stay to let the bullet pass"); in a 10-run learning loop it kept one rule and Jev got worse. With the prompt explaining what hits the ship and a hindsight line per moment, thinking off: 7 rules from 8 deaths, 5 saved the death they were written for, and each saved 5.1 of the other 7 on average, in about 1 s per rule. Thinking on: 3 rules, none usable (it echoed the reply template), about 16 s per rule.
+
 **Open, answered in the build:**
-- Does thinking on make Nemotron's rules pass more often? Measured on the same saved deaths, thinking off vs on.
 - Is 1.5 s of lead enough? Counted from `unsolved` deaths.
 - **Folder and repo name:** the project folder is still `GoFrogGo`.

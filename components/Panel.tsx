@@ -2,11 +2,12 @@
 
 import type { RunEnd } from "@/lib/game/loop";
 import { MOVES, type Move } from "@/lib/game/world";
+import type { Book, JudgeStep, Verdict } from "@/lib/learn/judge";
 import type { Decision } from "@/lib/system1/types";
 
 export type Status = "idle" | "starting" | "running" | "retrying" | "between" | "stopped" | "error";
 export type Mode = "jev" | "you";
-export type RunRow = RunEnd & { n: number; who: Mode };
+export type RunRow = RunEnd & { n: number; who: Mode; kills: number; rules: number | null }; // rules: Jev runs only
 
 // A small chip next to the title for Jev's connection, so outages never move the layout.
 export function StatusChip({ status, error }: { status: Status; error: string | null }) {
@@ -126,7 +127,10 @@ export function RunHistory({ runs, seed, live }: { runs: RunRow[]; seed: number;
                 {r.score}
                 {isBest && <span className="runStar"> ★</span>}
               </span>
-              <span className="runSeconds">{Math.round(r.seconds)} S</span>
+              <span className="runSeconds">
+                {r.kills} {r.kills === 1 ? "kill" : "kills"}
+                {r.rules !== null && ` · ${r.rules} ${r.rules === 1 ? "rule" : "rules"}`} · {Math.round(r.seconds)} s
+              </span>
             </li>
           );
         })}
@@ -146,7 +150,19 @@ export function RunHistory({ runs, seed, live }: { runs: RunRow[]; seed: number;
   );
 }
 
-export function Controls({ status, onStart, onStop }: { status: Status; onStart: () => void; onStop: () => void }) {
+export function Controls({
+  status,
+  onStart,
+  onStop,
+  onForget,
+  canForget = false,
+}: {
+  status: Status;
+  onStart: () => void;
+  onStop: () => void;
+  onForget?: () => void; // Jev mode only; undefined hides the button
+  canForget?: boolean; // anything learned to forget
+}) {
   const busy = status === "running" || status === "starting" || status === "retrying" || status === "between";
   return (
     <div className="controls">
@@ -156,6 +172,113 @@ export function Controls({ status, onStart, onStop }: { status: Status; onStart:
       <button className="btn" onClick={onStop} disabled={!busy}>
         STOP
       </button>
+      {onForget && (
+        <button className="btn btnQuiet" onClick={onForget} disabled={busy || !canForget}>
+          FORGET RULES
+        </button>
+      )}
     </div>
+  );
+}
+
+// What the coach is doing between runs, then its verdict on the last death.
+export function CoachBox({ step, verdict, run }: { step: JudgeStep | null; verdict: Verdict | null; run: number | null }) {
+  let tag: { text: string; tone: "gold" | "red" | "lilac" } | null = null;
+  const lines: { text: string; className: string }[] = [];
+  const who = run ? `run ${run}'s death` : "the death";
+
+  if (step) {
+    const doing =
+      step.kind === "reproduce"
+        ? `Replaying ${who} to check it happens again…`
+        : step.kind === "coach"
+          ? step.attempt === 1
+            ? `Nemotron is studying ${who}…`
+            : "Nemotron is writing a different rule…"
+          : step.kind === "test"
+            ? "Testing the rule on a replay of the death…"
+            : step.kind === "earlier"
+              ? `Checking earlier deaths still survive: ${step.i} of ${step.of}…`
+              : "Checking Jev still fires when nothing is coming…";
+    lines.push({ text: doing, className: "coachDoing" });
+    if (step.kind === "test") lines.push({ text: `Rule: ${step.coaching.rule}`, className: "coachRule" });
+  } else if (verdict) {
+    const last = verdict.attempts.at(-1);
+    const happened = verdict.death.happened ?? last?.coaching?.happened;
+    if (verdict.kind === "kept" && last?.coaching) {
+      const replaced = last.coaching.change.kind === "replace";
+      const n = last.coaching.change.kind === "replace" ? last.coaching.change.n : verdict.book.rules.length;
+      tag = { text: replaced ? "RULE CHANGED" : "NEW RULE", tone: "gold" };
+      if (happened) lines.push({ text: `What happened: ${happened}`, className: "coachHappened" });
+      lines.push({ text: `Rule ${n}: ${last.coaching.rule}`, className: "coachRule" });
+      const parts = ["Replay: survived."];
+      if (last.earlier.tested) parts.push(`Earlier deaths: ${last.earlier.survived} of ${last.earlier.tested} still survive.`);
+      if (last.controls.tested) parts.push(`Still fires in ${last.controls.fired} of ${last.controls.tested} calm moments.`);
+      lines.push({ text: parts.join(" "), className: "coachMeta" });
+    } else if (verdict.kind === "luck") {
+      tag = { text: "LUCK", tone: "lilac" };
+      lines.push({ text: "Replayed with the same rules, Jev lived. That death came down to timing, so no rule.", className: "coachHappened" });
+    } else if (verdict.kind === "none") {
+      tag = { text: "NO RULE", tone: "lilac" };
+      if (happened) lines.push({ text: `What happened: ${happened}`, className: "coachHappened" });
+      lines.push({ text: "Nemotron: nothing Jev read could have saved it. Rulebook unchanged.", className: "coachMeta" });
+    } else if (verdict.kind === "didnt-hold") {
+      tag = { text: "DIDN'T HOLD", tone: "red" };
+      if (happened) lines.push({ text: `What happened: ${happened}`, className: "coachHappened" });
+      const tried = verdict.attempts.filter((a) => a.coaching?.rule);
+      const final = tried.at(-1);
+      if (final?.coaching?.rule) lines.push({ text: `Last rule tried: ${final.coaching.rule}`, className: "coachRule" });
+      const reason = !final
+        ? ""
+        : final.thisDeath && final.thisDeath.outcome !== "survived"
+          ? "Jev still died in the replay."
+          : final.earlier.survived < final.earlier.tested
+            ? "It broke an earlier fix."
+            : "Jev stopped shooting with it.";
+      lines.push({ text: `${reason} ${tried.length > 1 ? "Both rules failed" : "The rule failed"}, so the rulebook is unchanged.`.trim(), className: "coachMeta" });
+    } else if (verdict.kind === "untested") {
+      tag = { text: "NO RULE", tone: "lilac" };
+      lines.push({ text: "Jev didn't answer during the replay, so no rule could be tested. Rulebook unchanged.", className: "coachMeta" });
+    } else {
+      tag = { text: "NO RULE", tone: "lilac" };
+      lines.push({ text: `Nemotron didn't answer (${last?.error ?? "no reply"}). Rulebook unchanged.`, className: "coachMeta" });
+    }
+  } else {
+    lines.push({ text: "Watching. After each death, Nemotron writes Jev one rule, and a replay of the death decides if it stays.", className: "coachHappened" });
+  }
+
+  return (
+    <section className="win winCoach coach" aria-label="Coach" aria-live="polite">
+      <div className="coachHead">
+        <h2>COACH · NEMOTRON ON NEBIUS</h2>
+        {tag && <span className={`tag ${tag.tone}`}>{tag.text}</span>}
+      </div>
+      {lines.map((l, i) => (
+        <p key={i} className={l.className}>
+          {l.text}
+        </p>
+      ))}
+    </section>
+  );
+}
+
+// Jev's rulebook. A rule that just arrived flashes for a second.
+export function RulebookBox({ book, fresh }: { book: Book; fresh: number | null }) {
+  return (
+    <section className="win winNeutral" aria-label="Rulebook">
+      <h2>RULEBOOK · {book.rules.length} {book.rules.length === 1 ? "RULE" : "RULES"}</h2>
+      {book.rules.length ? (
+        <ol className="ruleList">
+          {book.rules.map((r, i) => (
+            <li key={i} className={`ruleRow ${fresh === i ? "fresh" : ""}`}>
+              <span className="ruleN">{i + 1}</span>
+              <span className="ruleText">{r}</span>
+            </li>
+          ))}
+        </ol>
+      ) : (
+        <p className="ruleEmpty">Empty. Jev starts on reflexes alone.</p>
+      )}
+    </section>
   );
 }
