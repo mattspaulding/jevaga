@@ -25,13 +25,13 @@ import type { BeatLog, Lesson } from "@/lib/system2/nemotron";
 const PAUSE_BETWEEN_RUNS_MS = 1500;
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-async function post<T>(url: string, body: unknown): Promise<T> {
-  const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+async function post<T>(url: string, body: unknown, signal?: AbortSignal): Promise<T> {
+  const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal });
   const json = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
   return json as T;
 }
-const getMove = (input: DecideInput) => post<Decision>("/api/move", input);
+const getMove = (input: DecideInput, signal?: AbortSignal) => post<Decision>("/api/move", input, signal);
 const getLesson = (input: { playbook: string[]; beats: BeatLog[]; cause: RunEnd["cause"] }) =>
   post<Lesson>("/api/lesson", input);
 
@@ -67,7 +67,9 @@ export default function Game() {
   const [playbook, setPlaybook] = useState<string[]>(["Jump forward."]);
   const [coach, setCoach] = useState<Coach>({ kind: "idle" });
   const [runs, setRuns] = useState<(RunEnd & { n: number; who: Mode })[]>([]);
-  const stopRef = useRef(false);
+  // Each Start gets a run id; Stop bumps it, so an old loop still awaiting
+  // something sees it has been stopped and never touches the page again.
+  const runId = useRef(0);
   const playbookRef = useRef(playbook);
   const runCount = useRef(0);
   const keyboard = useRef(keyboardController());
@@ -77,6 +79,7 @@ export default function Game() {
   useEffect(() => {
     if (mode !== "you") return;
     const onKey = (e: KeyboardEvent) => {
+      if (e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
       const move = KEYS[e.key] ?? KEYS[e.key.toLowerCase()];
       if (!move) return;
       e.preventDefault();
@@ -101,38 +104,42 @@ export default function Game() {
   }, []);
 
   // You: one run on the road, same clock as Jev. Press Start to go again.
-  const startYou = useCallback(async () => {
+  const startYou = useCallback(async (stopped: () => boolean) => {
     const w = resetRun(world);
     keyboard.current = keyboardController(); // drop any key pressed before Start
     setWorld(w);
     setHit(false);
     setLastKey(null);
     setStatus("running");
-    const { end } = await playRun(w, keyboard.current, { playbook: [], onBeat, stopped: () => stopRef.current });
+    const { end } = await playRun(w, keyboard.current, { playbook: [], onBeat, stopped });
+    if (stopped()) return;
     if (end) record(end, "you");
     setStatus("stopped");
   }, [world, onBeat, record]);
 
   // Jev: run after run on the same road until Stop. Jev plays in real time,
   // the run ends, Nemotron writes a rule, the rule joins the playbook, the road replays.
-  const startJev = useCallback(async () => {
+  const startJev = useCallback(async (stopped: () => boolean) => {
     setStatus("starting");
     // Health check: if Jev can't answer the first question in three tries, don't start.
     const first = resetRun(world);
     for (let tries = 1; ; tries++) {
       try {
         await getMove({ state: describeState(first), moves: describeMoves(first), playbook: playbookRef.current });
+        if (stopped()) return;
         break;
       } catch (e) {
-        if (tries >= 3 || stopRef.current) {
+        if (stopped()) return;
+        if (tries >= 3) {
           setError(e instanceof Error ? e.message : String(e));
           setStatus("error");
           return;
         }
         await sleep(1000);
+        if (stopped()) return;
       }
     }
-    while (!stopRef.current) {
+    while (!stopped()) {
       const w = resetRun(world);
       setWorld(w);
       setHit(false);
@@ -145,34 +152,37 @@ export default function Game() {
         onBeat,
         onPause: () => setStatus("retrying"),
         onResume: () => setStatus("running"),
-        stopped: () => stopRef.current,
+        stopped,
       });
-      if (!end) break;
+      if (!end || stopped()) return;
       record(end, "jev");
 
       setStatus("coaching");
       setCoach({ kind: "thinking" });
       try {
         const lesson = await getLesson({ playbook: playbookRef.current, beats, cause: end.cause });
+        if (stopped()) return;
         playbookRef.current = [...playbookRef.current, lesson.rule];
         setPlaybook(playbookRef.current);
         setCoach({ kind: "lesson", lesson });
       } catch {
+        if (stopped()) return;
         setCoach({ kind: "failed" });
       }
       await sleep(PAUSE_BETWEEN_RUNS_MS);
     }
-    setStatus("stopped");
   }, [world, onBeat, record]);
 
   const start = useCallback(() => {
-    stopRef.current = false;
+    const id = ++runId.current;
+    const stopped = () => runId.current !== id;
     setError(null);
-    return mode === "you" ? startYou() : startJev();
+    return mode === "you" ? startYou(stopped) : startJev(stopped);
   }, [mode, startYou, startJev]);
 
   const stop = useCallback(() => {
-    stopRef.current = true;
+    runId.current++;
+    setStatus("stopped");
   }, []);
 
   return (

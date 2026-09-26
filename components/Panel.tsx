@@ -100,7 +100,18 @@ export function DecisionBox({ decision, status, late }: { decision: Decision | n
           <p className="lateLine">{late > 0 ? `Too slow ${late}× this run → frog waited` : "\u00a0"}</p>
         </>
       ) : (
-        <p className="muted">{status === "starting" ? "Asking Jev…" : status === "error" ? "Jev didn't answer. Press Start to try again." : "Press Start."}</p>
+        <>
+          <p className="muted">
+            {status === "starting"
+              ? "Asking Jev…"
+              : status === "running" || status === "retrying"
+                ? "Waiting on Jev…"
+                : status === "error"
+                  ? "Jev didn't answer. Press Start to try again."
+                  : "Press Start."}
+          </p>
+          <p className="lateLine">{late > 0 ? `Too slow ${late}× this run → frog waited` : "\u00a0"}</p>
+        </>
       )}
     </section>
   );

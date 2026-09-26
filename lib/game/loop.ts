@@ -30,6 +30,11 @@ export type RunHooks = {
 };
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, Math.max(0, ms)));
+// Sleeps in short slices so Stop takes effect within ~100 ms.
+async function sleepUnlessStopped(ms: number, stopped: () => boolean) {
+  const until = Date.now() + ms;
+  while (!stopped() && Date.now() < until) await sleep(Math.min(100, until - Date.now()));
+}
 
 // The situation at the start of a beat, plus hindsight for the coach: moves
 // that survive this beat and leave at least one move that survives the next.
@@ -62,7 +67,7 @@ export async function playRun(
   let paused = false;
 
   while (world.alive && !hooks.stopped()) {
-    await sleep(next - Date.now());
+    await sleepUnlessStopped(next - Date.now(), hooks.stopped);
     if (hooks.stopped()) break;
 
     const choice = controller.take();
@@ -70,7 +75,7 @@ export async function playRun(
       // The world holds still during an outage: ask again, then give a full beat.
       if (!paused) hooks.onPause?.();
       paused = true;
-      await sleep(RETRY_MS);
+      await sleepUnlessStopped(RETRY_MS, hooks.stopped);
       if (hooks.stopped()) break;
       controller.prepare({ state: snap.state, moves: snap.moves, playbook: hooks.playbook });
       next = Date.now() + beatMs;
@@ -103,29 +108,42 @@ export async function playRun(
 
 // Jev plays: each beat's question goes out as soon as the previous tick lands.
 // An answer that arrives after the tick is thrown away (it was about a board
-// that no longer exists) and the frog waits. An error pauses the clock.
-export function jevController(getMove: (input: DecideInput) => Promise<Decision>): Controller {
+// that no longer exists) and the frog waits. Errors, or several late answers
+// in a row, mean Jev is down rather than slow: the clock pauses instead.
+const LATE_IN_A_ROW_IS_OUTAGE = 4;
+export function jevController(getMove: (input: DecideInput, signal: AbortSignal) => Promise<Decision>): Controller {
   let seq = 0;
   let ready: Decision | null = null;
-  let failed = false;
+  let failed = false; // latched until an answer arrives, from whichever request failed
+  let lateInARow = 0;
+  let inFlight: AbortController | null = null;
   return {
     prepare(input) {
       const id = ++seq;
       ready = null;
-      failed = false;
+      inFlight?.abort(); // the old question is about a board that no longer exists
+      const ctrl = new AbortController();
+      inFlight = ctrl;
       const sent = performance.now();
-      getMove(input).then(
+      getMove(input, ctrl.signal).then(
         (d) => {
+          failed = false;
           if (id === seq) ready = { ...d, ms: Math.round(performance.now() - sent) };
         },
         () => {
-          if (id === seq) failed = true;
+          if (!ctrl.signal.aborted) failed = true;
         },
       );
     },
     take() {
-      if (ready) return { move: ready.move, decision: ready, late: false };
-      if (failed) return "pause";
+      if (ready) {
+        lateInARow = 0;
+        return { move: ready.move, decision: ready, late: false };
+      }
+      if (failed || ++lateInARow >= LATE_IN_A_ROW_IS_OUTAGE) {
+        lateInARow = 0;
+        return "pause";
+      }
       return { move: "wait", decision: null, late: true };
     },
   };
