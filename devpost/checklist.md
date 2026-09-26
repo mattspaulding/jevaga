@@ -40,13 +40,13 @@ Build mode: fast (chosen 2026-09-25)
   Commit: `Coach writes lessons and runs replay with the playbook`
 
 - [ ] **4. It looks like a 16-bit game**
-  Becomes usable: The road, cars, trees and frog are outlined, shaded 16×16 pixel sprites in the style-B palette you picked; the panel uses Press Start 2P headings and names each model ("JEV · via Vercel AI Gateway", "NEMOTRON · Nebius Token Factory"); hits show a splat and new rules flash.
+  Becomes usable: The road, cars, trees and frog are outlined, shaded 16×16 pixel sprites in the style-B palette you picked; the panel is the 16-bit window design from the canvas (Pixelify Sans, Jersey 20 numbers, tinted RPG windows) and names each model ("JEV · VIA VERCEL AI GATEWAY", "NEMOTRON · NEBIUS TOKEN FACTORY"); a HUD tag says who has the frog; hits show a splat and a HIT banner; new rules flash.
   Why now: The look matters for the video, but it's safest after the behavior works, so styling never hides a logic bug.
   PRD ref: `prd.md > Look and Feel`, `prd.md > Screens and Layout`
   Spec ref: `spec.md > Look and Feel`, `spec.md > Game canvas`, `spec.md > Panel`
-  Build: `lib/game/sprites.ts` (frog, cars in four colors and two lengths, tree, grass texture) with outline and bottom-row shading; update `render.ts`; fonts via `next/font/google`; palette tokens in `app/globals.css`; panel styling, model labels, splat and flash.
-  Verify (mechanical): `pnpm build` passes; screenshot the running game in the browser pane and check it against the palette and sprite rules; the page text contains both model labels; no console errors.
-  Learner check: Open the game and compare it with the style-B sample you picked. Does it feel like the same game, and does the frog read clearly as a frog?
+  Build: copy the sprite grids from `devpost/design-handoff.md` into `lib/game/sprites.ts` (frog, cars in two lengths and two directions, tree, splat, grass tile) with a letter-to-color legend; update `render.ts` (grass tile, curbs, dashes, trees from the row rng, splat); Pixelify Sans and Jersey 20 via `next/font/google`; tokens, banded background, window, meter, switch, button and chip styles in `app/globals.css` per the handoff; panel restyle including the keypad legend in You mode, the "JEV'S PLAYBOOK" strip, the NEW RULE tag, the between-runs countdown line, HUD tags and the HIT banner.
+  Verify (mechanical): `pnpm build` passes; screenshot the running game in the browser pane and check it against `design-handoff.md` (palette, sprite grids, window recipe); the page text contains both model labels; no console errors.
+  Learner check: Open the game and compare it with the design canvas ("Go Frog Go — Play & Jev mode"). Does it feel like the same game, and does the frog read clearly as a frog?
   Commit: `Add 16-bit sprites and styled panel`
 
 - [ ] **5. It fails honestly and can run offline**
@@ -92,5 +92,6 @@ Activity mode:
 - Minimum beat raised to 500 ms and Jev's answers reused for exact repeats — Matt hit a 429; our own test runs were competing for the same rate limit.
 - The game runs on a real-time clock and you can play it with the keyboard — Matt at the slice 3 checkpoint: make it playable first, and real time "or else… it could easily just be solved by a solver. That's the whole point of using Jev." Reverses the spec's turn-based simplification; a late Jev answer now means the frog waits that beat. Human play moved up from Later.
 - Rebuilt as a continuous game: cars glide, the frog hops the instant a key is pressed or Jev's answer lands, and Jev reads times in seconds — Matt: key presses felt slow and cars should move smoothly, not by grid. Replaces the 600 ms beat clock; road generation still uses beats as a conservative crossability check.
+- Look settled on the design canvas (2026-09-26): SNES-era stays, an N64 low-poly look was considered and dropped; the panel becomes 16-bit RPG windows with Pixelify Sans and Jersey 20 in place of Press Start 2P. Sprites, palette and every panel value live in `devpost/design-handoff.md`, extracted from the canvas so slice 4 builds from it instead of re-inventing them.
 - Jev's "unavailable" was AI Gateway's free-tier rate limit (~25-30 requests a minute, surfacing as 503s), not TypeSafe downtime — measured 29/40 at 1/s and 4/30 at 2/s on the free tier, then 120/120 up to 4/s after Matt bought gateway credit for the Strawberry Digital team. Jev is asked up to 4 times a second again.
 - The coach edits the playbook instead of appending to it: one add/replace/remove per run, at most 4 rules above a fixed "Otherwise, jump forward." — Matt picked option 1 after the playbook grew to 10 contradictory rules. Asking Nemotron to rewrite the whole list failed (it rewrote every rule and invented its own vocabulary), so the code applies a single edit. Seed 13 then climbed 2 → 7 → 16 → 32 → 32 before later edits regressed it.

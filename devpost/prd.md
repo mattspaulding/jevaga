@@ -37,7 +37,7 @@ Source: `scope.md > Inspiration & Identity`. Matt picked style B and the frog fr
 - 16-bit SNES-era pixel art: rich palette, dark sprite outlines, shaded lower edges, textured two-tone grass.
 - Frog player character. Cars in several colors on dark asphalt with yellow dashed lane lines. Trees on grass strips.
 - Crossy Road's endless hopping with Frogger's close calls: cars glide smoothly across the screen and the frog hops the instant you press. Original sprites and name only.
-- The right panel matches: pixel font for headings, same palette, so it reads as one game, not a game with a dashboard bolted on.
+- The right panel matches: 16-bit RPG-style windows (a white bevelled frame over a banded fill tinted per model: Jev blue, Nemotron purple, you green), Pixelify Sans text with Jersey 20 numbers, gold for the chosen move and the best run. A tag on the game says who has the frog (YOU / JEV). Settled on the design canvas 2026-09-26; every value is in `design-handoff.md`.
 
 ## Features and Behavior
 

@@ -32,7 +32,7 @@ PRD ref: `prd.md > The Core Journey`.
 - **HTML canvas** for the game, drawn with plain 2D context calls and pixel-art sprites defined in code. No game engine: the world is a grid and a few sprites, and an engine would add more to learn than it saves.
 - **Plain `fetch`** for both model APIs. No SDKs. The TypeSafe JS SDK (`@typesafe-ai/sdk`) exists, but the raw request is short, and plain fetch removes one dependency and one thing that can drift.
 - **pnpm** (already installed).
-- **`next/font/google`** for Press Start 2P (headings) and a readable body font.
+- **`next/font/google`** for Pixelify Sans (all panel text) and Jersey 20 (numbers). *(Changed 2026-09-26 from Press Start 2P; see `design-handoff.md`.)*
 - **Vercel** for deployment.
 
 ## Where It Runs and How Someone Tries It
@@ -52,9 +52,9 @@ PRD ref: `prd.md > The Core Journey`.
 ## Look and Feel
 From `prd.md > Look and Feel`.
 - **Palette** (the style-B sample Matt picked): grass `#5fbf3f` with texture pixels `#4fa935`; asphalt `#4a4a58`; lane dashes `#f7e27a`; outline `#1b1b28`; frog greens `#3fbf6a` and `#c8f07a`; cars `#e8423a`, `#3b6fe0`, `#f2c233`, `#9b4de0`; trees `#2f7d3a` and `#8a5a2b`.
-- **Sprites:** 16×16 pixel sprites defined as character grids in `lib/game/sprites.ts`, drawn with a 1-pixel dark outline and the bottom rows shaded 20% darker, as in the sample. Canvas scaled up with `image-rendering: pixelated`.
-- **Type:** Press Start 2P for panel headings and numbers; a plain sans for lesson text so it stays readable.
-- **Panel:** dark background `#1b1b28`, with the palette as accents: Jev blue for the Decision box, Nemotron purple for the Coach box. Each box names its model ("JEV · via Vercel AI Gateway", "NEMOTRON · Nebius Token Factory"), so the video shows which model is doing what.
+- **Sprites:** 16×16 pixel sprites defined as character grids in `lib/game/sprites.ts`, drawn with a 1-pixel dark outline and the bottom rows shaded 20% darker, as in the sample. Canvas scaled up with `image-rendering: pixelated`. The grids themselves (frog, cars in two lengths and two directions, tree, splat, grass tile) are in `design-handoff.md`, extracted from the design canvas.
+- **Type:** Pixelify Sans (400–700) for every piece of panel text, lessons at 17px; Jersey 20 for numbers. Both via `next/font/google`. *(Replaced Press Start 2P on 2026-09-26: it reads as an 80s arcade font, and the chunkier faces survive video compression better.)*
+- **Panel:** 16-bit RPG windows: a 3px `#f2f0e6` frame with a 2px `#0c1030` inner ring and a hard 4px shadow, over four hard bands of the window's tint (Jev blue, Nemotron purple, you green, neutral slate), white text with a 1px dark shadow. Gold `#ffe680` marks the chosen move and the best run. Each window names its model ("JEV · VIA VERCEL AI GATEWAY", "NEMOTRON · NEBIUS TOKEN FACTORY"), so the video shows which model is doing what. The page behind is a six-band navy gradient. Exact values, meters, switch, buttons, chips and HUD: `design-handoff.md`.
 - **Density and energy:** arcade. Numbers change every beat, and a new lesson flashes when it lands.
 
 ## Components
