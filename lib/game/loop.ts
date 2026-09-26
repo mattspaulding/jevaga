@@ -3,7 +3,7 @@ import type { BeatLog } from "../system2/nemotron";
 import type { DecideInput, Decision } from "../system1/types";
 import { isHit, MOVES, step, targetOf, type World } from "./world";
 
-export const MIN_BEAT_MS = 350;
+export const MIN_BEAT_MS = 500;
 const KEEP_BEATS = 6;
 
 export type RunEnd = { cause: "hit" | "stalled"; distance: number };

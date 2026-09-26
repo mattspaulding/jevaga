@@ -1,4 +1,4 @@
-import { beatsUntilHit, carCells, COLS, Lane, Move, targetOf, World } from "./game/world";
+import { beatsUntilHit, carCells, COLS, Lane, Move, targetOf, visibleRows, World } from "./game/world";
 
 // Turns the world into the plain sentences Jev reads. Car facts are phrased as
 // time ("reaches column 4 this beat" = moving there now gets you hit), and the
@@ -32,31 +32,33 @@ function carSpots(lane: Lane, beat: number) {
   return spots.length ? `${spots.length > 1 ? "cars" : "a car"} at ${spots.join(" and ")}` : "no cars";
 }
 
+// Short timing for one column: "this beat", "in 3 beats", "not for at least 4 beats".
+function when(lane: Lane, col: number, beat: number): string {
+  const n = beatsUntilHit(lane, col, beat, HORIZON);
+  if (n === null) return `not for at least ${HORIZON} beats`;
+  return n === 1 ? "this beat" : `in ${n} beats`;
+}
+
+// Every lane on screen. Road lanes list where the cars are and when a car
+// reaches your column and the columns either side of it.
 export function describeState(world: World): string {
   const { row, col } = world.frog;
-  const here = world.rows[row];
-  const lines: string[] = [];
-  lines.push(
-    `You are in lane 0 (${here.kind === "grass" ? "grass" : "road"}), column ${col}.` +
-      (here.kind === "road" ? ` In your lane (${traffic(here)}), ${timing(here, col, world.beat)}.` : ""),
-  );
-  for (const offset of [1, 2, 3]) {
+  const { bottom, top } = visibleRows(row);
+  const cols = [col - 1, col, col + 1].filter((c) => c >= 0 && c < COLS);
+  const laneLine = (offset: number) => {
     const lane = world.rows[row + offset];
-    if (!lane) continue;
-    if (lane.kind === "grass") lines.push(`${cap(laneLabel(offset))}: grass.`);
-    else
-      lines.push(
-        `${cap(laneLabel(offset))} (${traffic(lane)}): ${carSpots(lane, world.beat)}; ${timing(lane, col, world.beat)}.`,
-      );
-  }
+    const name = offset === 0 ? "Lane 0, your lane," : cap(laneLabel(offset));
+    if (lane.kind === "grass") return `${name.replace(/,$/, "")}: grass.`;
+    const times = cols.map((c) => `column ${c} ${when(lane, c, world.beat)}`).join(", ");
+    return `${name} (${traffic(lane)}): ${carSpots(lane, world.beat)}. A car reaches ${times}.`;
+  };
+  const lines = [`You are in lane 0, column ${col}. Columns run 0 to ${COLS - 1}.`, laneLine(0)];
+  lines.push("Ahead:");
+  for (let r = row + 1; r <= top; r++) if (world.rows[r]) lines.push(laneLine(r - row));
   if (row === 0) lines.push(`Behind you: the edge; you can't go back.`);
   else {
-    const lane = world.rows[row - 1];
-    lines.push(
-      lane.kind === "grass"
-        ? `Lane -1 (behind you): grass.`
-        : `Lane -1 (behind you, ${traffic(lane)}): ${timing(lane, col, world.beat)}.`,
-    );
+    lines.push("Behind:");
+    for (let r = row - 1; r >= bottom; r--) lines.push(laneLine(r - row));
   }
   return lines.join("\n");
 }

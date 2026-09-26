@@ -2,7 +2,8 @@
 // Run: pnpm sim -- <seed> <runs>   (e.g. pnpm sim -- 13 8). Prints each run and the death beat.
 import { playRun } from "../lib/game/loop";
 import { newWorld, resetRun } from "../lib/game/world";
-import { jev } from "../lib/system1/jev";
+import { cacheStats } from "../lib/system1/cache";
+import { system1 } from "../lib/system1";
 import { writeLesson } from "../lib/system2/nemotron";
 
 const seed = Number(process.argv[2] ?? 13);
@@ -26,10 +27,10 @@ async function main() {
   for (let n = 1; n <= runs; n++) {
     const w = resetRun(base);
     const { end, beats } = await playRun(w, playbook, {
-      getMove: (input) => retry(() => jev.decide(input)),
+      getMove: (input) => retry(() => system1().decide(input)),
       onBeat: () => {},
       stopped: () => false,
-      minBeatMs: 0,
+      minBeatMs: 250, // gentler on Jev's rate limit than full speed
     });
     if (!end) break;
     distances.push(end.distance);
@@ -46,5 +47,6 @@ async function main() {
     }
   }
   console.log(`\nseed ${seed}: ${distances.join(" → ")}`);
+  console.log(`Jev calls: ${cacheStats.misses}, answered from memory: ${cacheStats.hits}`);
 }
 main();

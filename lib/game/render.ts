@@ -1,8 +1,8 @@
-import { carCells, COLS, type World } from "./world";
+import { carCells, COLS, VIEW_ROWS, visibleRows, type World } from "./world";
+
+export { VIEW_ROWS };
 
 export const TILE = 16;
-export const VIEW_ROWS = 12;
-const ROWS_BELOW_FROG = 3;
 
 const COLORS = {
   grass: "#5fbf3f",
@@ -16,7 +16,7 @@ const COLORS = {
 // Draws the rows around the frog. The camera keeps the frog 3 rows from the
 // bottom, so the road scrolls upward as it advances.
 export function render(ctx: CanvasRenderingContext2D, world: World, opts: { hit?: boolean } = {}) {
-  const bottom = Math.max(0, world.frog.row - ROWS_BELOW_FROG);
+  const { bottom } = visibleRows(world.frog.row);
   ctx.clearRect(0, 0, COLS * TILE, VIEW_ROWS * TILE);
   for (let i = 0; i < VIEW_ROWS; i++) {
     const rowIndex = bottom + i;

@@ -71,7 +71,7 @@ From `prd.md > Look and Feel`.
 
 ### Beat loop
 `lib/game/loop.ts`. PRD ref: `prd.md > The Core Journey`.
-- `await getMove()` → `step()` → render → wait until at least 350 ms have passed since the last beat → repeat. The minimum keeps the video watchable when Jev answers fast. One move request in flight at a time.
+- `await getMove()` → `step()` → render → wait until at least 500 ms have passed since the last beat → repeat. The minimum keeps the video watchable and keeps calls under Jev's rate limit (raised from 350 ms at the slice 3 checkpoint). One move request in flight at a time.
 - **Jev outages** (added in build): the first move gets three tries a second apart; after that a failure means "Jev unavailable" and the game doesn't start. Mid-run failures pause the loop, show "Jev unavailable, retrying…", and retry every 3 seconds until Jev answers or Stop.
 - **Run ends** on `hit`, or `stalled` when the furthest row hasn't grown in 15 beats. A stall is sent to the coach like a death, so it can teach the frog when to go. The run history marks it as a timeout.
 - Keeps `currentRunBeats`, the last 6 `BeatLog`s, for the lesson request.
@@ -79,7 +79,7 @@ From `prd.md > Look and Feel`.
 ### Describing the road to Jev
 `lib/describe.ts`. PRD ref: `prd.md > Fast decisions (System 1)`.
 - **Time, not distance.** Every car fact is phrased as when it covers a given column: "reaches column 4 this beat", "reaches column 4 in 2 beats", "is moving away". "This beat" means moving there now gets you hit. Time is measured along the car's direction of travel, with wrap-around taken into account, so it's unambiguous.
-- `describeState(world)` returns prose, not JSON, in this order: your lane (lane 0: grass or road, your column, any car facts for your column); lanes +1, +2, +3 ahead; lane −1 behind. At row 0 the lane behind is "the edge; you can't go back".
+- `describeState(world)` returns prose, not JSON, covering **every lane on screen** (Matt's call at the slice 3 checkpoint: "give it the whole visible board"): lane 0 first, then every lane ahead to the top of the screen, then the lanes behind. Each road lane gives its direction and speed, where every car is, and when a car reaches the frog's column and the columns either side of it. At row 0 the lane behind is "the edge; you can't go back". About 1,100 characters a beat.
 - `describeMoves(world)` returns five neutral move descriptions giving facts about the destination cell, never a verdict:
   - `forward`: "Step into lane +1, column 4. A car there reaches column 4 this beat."
   - `wait`: "Stay in lane 0, column 4. In your lane, a car reaches column 4 in 3 beats."
@@ -100,7 +100,7 @@ From `prd.md > Look and Feel`.
   ```
   The answer is read from `answers.move.choice`, `.probabilities` (a map over all five moves) and `.confidence`. On an error response, the route logs `error_type` from the body.
 - `fake.ts` returns the same shape from simple code. It picks `forward` unless the playbook contains a rule with the word "wait" and the forward description says "this beat". `source: "simulated"` makes the panel show SIMULATED. It's for offline work only; never recorded or submitted.
-- `index.ts` chooses the implementation from `SYSTEM1`.
+- `index.ts` chooses the implementation from `SYSTEM1`. Jev is wrapped in `cache.ts`, which reuses Jev's answer for an exact repeat of state, moves and playbook (replays of a road, Stop/Start, visitors on the same seed). It saves the call, not the decision.
 - The route validates the response. A missing answer, or a move outside the five, is an error; the route never guesses.
 
 ### Coach lessons (System 2)
@@ -115,7 +115,8 @@ From `prd.md > Look and Feel`.
 
 ### Panel
 `components/Panel.tsx` and its parts: `DecisionBox`, `CoachBox`, `Playbook`, `RunHistory`, `Controls`. PRD ref: `prd.md > Screens and Layout`, `prd.md > Run history`, `prd.md > States and Boundaries`.
-- **Decision** ("JEV · via Vercel AI Gateway"): the move, a confidence bar, and five small bars for the probabilities. SIMULATED badge when `source` is `"simulated"`. "Jev unavailable, retrying" on errors.
+- **Decision** ("JEV · via Vercel AI Gateway"): the move, a confidence bar, and five small bars for the probabilities. SIMULATED badge when `source` is `"simulated"`. Fixed height; keeps the last move shown during an outage.
+- **Status chip** next to the GO FROG GO title: "Jev unavailable · retrying" or "Jev unavailable", so outages never shift the layout (Matt's request).
 - **Coach** ("NEMOTRON · Nebius Token Factory"): idle; "thinking…"; then "What happened: …" and the new rule; or "couldn't write a lesson this time."
 - **Playbook:** numbered, newest flashes for 1 second.
 - **Runs:** number and distance per run, a timeout marker on stalls, best one starred. The seed is shown under the list.

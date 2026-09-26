@@ -2,7 +2,7 @@
 
 import { useCallback, useRef, useState } from "react";
 import GameCanvas from "@/components/GameCanvas";
-import { CoachBox, Controls, DecisionBox, Playbook, RunHistory, type Coach, type Status } from "@/components/Panel";
+import { CoachBox, Controls, DecisionBox, Playbook, RunHistory, StatusChip, type Coach, type Status } from "@/components/Panel";
 import { playRun, type RunEnd } from "@/lib/game/loop";
 import { randomSeed } from "@/lib/game/rng";
 import { newWorld, resetRun, type World } from "@/lib/game/world";
@@ -126,8 +126,11 @@ export default function Game() {
     <main className="layout">
       <GameCanvas world={world} frame={frame} hit={hit} />
       <aside className="panel">
-        <h1>GO FROG GO</h1>
-        <DecisionBox decision={decision} status={status} error={error} />
+        <div className="titleRow">
+          <h1>GO FROG GO</h1>
+          <StatusChip status={status} error={error} />
+        </div>
+        <DecisionBox decision={decision} status={status} />
         <CoachBox coach={coach} />
         <Playbook rules={playbook} />
         <RunHistory runs={runs} current={runs.length + 1} seed={seed} />

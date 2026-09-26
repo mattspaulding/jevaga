@@ -6,6 +6,13 @@ import type { Decision } from "@/lib/system1/types";
 import type { Lesson } from "@/lib/system2/nemotron";
 
 export type Status = "idle" | "starting" | "running" | "retrying" | "coaching" | "stopped" | "error";
+// A small chip next to the title for Jev's connection, so outages never move the layout.
+export function StatusChip({ status, error }: { status: Status; error: string | null }) {
+  if (status === "retrying") return <span className="chip warn-chip">Jev unavailable · retrying</span>;
+  if (status === "error") return <span className="chip warn-chip" title={error ?? undefined}>Jev unavailable</span>;
+  return null;
+}
+
 export type Coach = { kind: "idle" } | { kind: "thinking" } | { kind: "lesson"; lesson: Lesson } | { kind: "failed" };
 
 export function CoachBox({ coach }: { coach: Coach }) {
@@ -41,15 +48,11 @@ export function Playbook({ rules }: { rules: string[] }) {
   );
 }
 
-export function DecisionBox({ decision, status, error }: { decision: Decision | null; status: Status; error: string | null }) {
+export function DecisionBox({ decision, status }: { decision: Decision | null; status: Status }) {
   return (
     <section className="box decision" aria-label="Jev decision">
       <h2>JEV · via Vercel AI Gateway</h2>
-      {status === "error" ? (
-        <p className="warn">Jev unavailable. {error}</p>
-      ) : status === "retrying" ? (
-        <p className="warn">Jev unavailable, retrying…</p>
-      ) : decision ? (
+      {decision ? (
         <>
           <p className="pick">
             <strong>{decision.move}</strong> <span className="num">{decision.confidence.toFixed(2)}</span>
@@ -67,7 +70,7 @@ export function DecisionBox({ decision, status, error }: { decision: Decision | 
           </ul>
         </>
       ) : (
-        <p className="muted">{status === "starting" ? "Asking Jev…" : "Press Start."}</p>
+        <p className="muted">{status === "starting" ? "Asking Jev…" : status === "error" ? "Jev didn't answer. Press Start to try again." : "Press Start."}</p>
       )}
     </section>
   );

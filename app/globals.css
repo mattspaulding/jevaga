@@ -58,3 +58,8 @@ html, body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.4
 .playbook li.fresh { animation: flash 1s ease-out; }
 @keyframes pulse { 50% { opacity: 0.4; } }
 @keyframes flash { 0% { background: var(--coach); color: #1b1b28; } 100% { background: transparent; } }
+.titleRow { display: flex; align-items: center; gap: 10px; min-height: 26px; }
+.chip { font-size: 11px; padding: 3px 8px; border: 1px solid currentColor; letter-spacing: 0.04em; white-space: nowrap; }
+.warn-chip { color: var(--warn); }
+.decision { min-height: 190px; }
+.coach { min-height: 92px; }

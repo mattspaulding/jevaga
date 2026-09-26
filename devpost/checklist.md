@@ -87,3 +87,6 @@ Activity mode:
 - The coach gets hindsight from the replay (all five options at the fatal beat, which moves would have survived, the earlier beat if the frog was trapped), and rules whose move wouldn't have saved the frog are sent back — without it, Nemotron wrote rules like "go back into the car" that took seed 13 from 22 back down to 2 for four straight runs.
 - Repeat detection compares a rule's lanes, timing and move instead of word overlap — word overlap called "lane -1 … wait" a repeat of "lane +1 … wait" and blocked correct rules.
 - Added `scripts/sim.ts` (headless runs with real models) — tuning through the browser was too slow; runs sequentially because parallel sims hit Jev's 429 rate limit.
+- Jev now reads the whole visible board (every lane on screen, three columns of timing) — Matt's call at the slice 3 checkpoint, after seeing Jev only had the lanes right around the frog.
+- Jev outages show as a chip beside the title instead of replacing the Jev box — Matt: the box swap shifted the whole screen.
+- Minimum beat raised to 500 ms and Jev's answers reused for exact repeats — Matt hit a 429; our own test runs were competing for the same rate limit.

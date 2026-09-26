@@ -3,6 +3,13 @@ import { makeRng } from "./rng";
 export const COLS = 9;
 export const START_COL = 4;
 export const STALL_BEATS = 15;
+// What's on screen: 12 rows, with the frog 3 rows from the bottom.
+export const VIEW_ROWS = 12;
+export const ROWS_BELOW_FROG = 3;
+export function visibleRows(frogRow: number): { bottom: number; top: number } {
+  const bottom = Math.max(0, frogRow - ROWS_BELOW_FROG);
+  return { bottom, top: bottom + VIEW_ROWS - 1 };
+}
 const MAX_ROAD_RUN = 3;
 const LANE_BUDGET = 5; // sum of (length + speed) over a lane's cars
 

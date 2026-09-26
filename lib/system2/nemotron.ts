@@ -22,7 +22,8 @@ const SYSTEM = `You coach a frog in a grid road-crossing game. A fast model pick
 How the game works:
 - The world moves in beats. Each beat the frog makes one move (forward, left, right, back, wait), then every car advances.
 - The frog is hit if a car covers or passes through the frog's cell during that beat.
-- "Lane 0" is the frog's lane. "Lane +1" is the next lane ahead, "lane -1" is behind. Columns are 0 to 8.
+- "Lane 0" is the frog's lane. "Lane +1" is the next lane ahead, "lane +2" the one after, and so on to the top of the screen; "lane -1" is behind. Columns are 0 to 8.
+- The fast model sees every lane on screen: where the cars are, and when a car reaches the frog's column and the columns either side of it.
 - Timing words: a car "reaches column N this beat" means being in column N now gets the frog hit. "In N beats" means it arrives later. "For at least 4 beats" means clear for now.
 - A run also ends if the frog makes no forward progress for 15 beats (cause "stalled").
 
