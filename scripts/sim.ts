@@ -5,14 +5,15 @@ import { driveWithJev, startRun } from "../lib/game/loop";
 import { newWorld, resetRun } from "../lib/game/world";
 import { system1 } from "../lib/system1";
 import { cacheStats } from "../lib/system1/cache";
-import { writeLesson } from "../lib/system2/nemotron";
+import { writeLesson, type RunRecord } from "../lib/system2/nemotron";
 
 const seed = Number(process.argv[2] ?? 13);
 const runs = Number(process.argv[3] ?? 6);
 
 async function main() {
   const base = newWorld(seed);
-  const playbook = ["Jump forward."];
+  let playbook = ["Jump forward."];
+  const history: RunRecord[] = [];
   const distances: number[] = [];
   for (let n = 1; n <= runs; n++) {
     const run = startRun(resetRun(base));
@@ -21,7 +22,7 @@ async function main() {
     const [end, decisions] = await Promise.all([
       run.done,
       driveWithJev(run, (input) => system1().decide(input), {
-        playbook: [...playbook],
+        playbook,
         onDecision: (d) => times.push(d.ms ?? 0),
         onPause: () => pauses++,
       }),
@@ -33,9 +34,10 @@ async function main() {
     console.log(`\nRun ${n}: ${end.cause} at row ${end.distance} after ${run.world.t.toFixed(1)} s, ${times.length} decisions, avg answer ${avg} ms, ${pauses} outage pauses`);
     if (last) console.log(`  last: chose ${last.move} (${last.confidence.toFixed(2)}): ${last.moveText}   safe: ${last.safe?.join(", ")}`);
     try {
-      const lesson = await writeLesson({ playbook, beats: decisions, cause: end.cause });
-      playbook.push(lesson.rule);
-      console.log(`  coach: ${lesson.whatHappened}\n  + rule ${playbook.length}: ${lesson.rule}`);
+      history.push({ distance: end.distance, cause: end.cause, playbook });
+      const lesson = await writeLesson({ playbook, beats: decisions, cause: end.cause, history });
+      playbook = lesson.playbook;
+      console.log(`  coach: ${lesson.whatHappened} ${lesson.change}\n  playbook:\n${playbook.map((r, i) => `    ${i + 1}. ${r}`).join("\n")}`);
     } catch (e) {
       console.log(`  coach failed: ${(e as Error).message}`);
     }

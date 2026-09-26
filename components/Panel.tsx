@@ -53,21 +53,22 @@ export function CoachBox({ coach }: { coach: Coach }) {
       {coach.kind === "lesson" && (
         <>
           <p className="happened">{coach.lesson.whatHappened}</p>
-          <p className="rule">New rule: {coach.lesson.rule}</p>
+          <p className="rule">{coach.lesson.change}</p>
         </>
       )}
     </section>
   );
 }
 
-// Numbered rules; the newest flashes when it lands (keyed by count, so it replays).
-export function Playbook({ rules }: { rules: string[] }) {
+// Numbered rules. After a rewrite, rules that weren't in the last playbook flash.
+export function Playbook({ rules, previous }: { rules: string[]; previous: string[] }) {
+  const old = new Set(previous);
   return (
     <section className="box playbook" aria-label="Playbook">
       <h2>PLAYBOOK</h2>
       <ol>
         {rules.map((r, i) => (
-          <li key={`${i}-${rules.length}`} className={i === rules.length - 1 && i > 0 ? "fresh" : ""}>
+          <li key={`${r}-${rules.length}-${i}`} className={previous.length > 0 && !old.has(r) ? "fresh" : ""}>
             {r}
           </li>
         ))}

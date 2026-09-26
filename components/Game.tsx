@@ -20,7 +20,7 @@ import { driveWithJev, startRun, type Run, type RunEnd } from "@/lib/game/loop";
 import { randomSeed } from "@/lib/game/rng";
 import { newWorld, resetRun, type Move, type World } from "@/lib/game/world";
 import type { DecideInput, Decision } from "@/lib/system1/types";
-import type { BeatLog, Lesson } from "@/lib/system2/nemotron";
+import type { BeatLog, Lesson, RunRecord } from "@/lib/system2/nemotron";
 
 const PAUSE_BETWEEN_RUNS_MS = 1500;
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -32,7 +32,7 @@ async function post<T>(url: string, body: unknown, signal?: AbortSignal): Promis
   return json as T;
 }
 const getMove = (input: DecideInput, signal?: AbortSignal) => post<Decision>("/api/move", input, signal);
-const getLesson = (input: { playbook: string[]; beats: BeatLog[]; cause: RunEnd["cause"] }) =>
+const getLesson = (input: { playbook: string[]; beats: BeatLog[]; cause: RunEnd["cause"]; history: RunRecord[] }) =>
   post<Lesson>("/api/lesson", input);
 
 const KEYS: Record<string, Move> = {
@@ -66,6 +66,8 @@ export default function Game() {
   const [decision, setDecision] = useState<Decision | null>(null);
   const [lastKey, setLastKey] = useState<Move | null>(null);
   const [playbook, setPlaybook] = useState<string[]>(["Jump forward."]);
+  const [previousPlaybook, setPreviousPlaybook] = useState<string[]>([]);
+  const history = useRef<RunRecord[]>([]);
   const [coach, setCoach] = useState<Coach>({ kind: "idle" });
   const [runs, setRuns] = useState<(RunEnd & { n: number; who: Mode })[]>([]);
   // Each Start gets a run id; Stop bumps it, so an older loop still awaiting
@@ -166,14 +168,21 @@ export default function Game() {
         ]);
         if (!end || stopped()) return;
         finishRun(end, "jev");
+        history.current = [...history.current, { distance: end.distance, cause: end.cause, playbook: playbookRef.current }];
 
         setStatus("coaching");
         setCoach({ kind: "thinking" });
         try {
-          const lesson = await getLesson({ playbook: playbookRef.current, beats: decisions, cause: end.cause });
+          const lesson = await getLesson({
+            playbook: playbookRef.current,
+            beats: decisions,
+            cause: end.cause,
+            history: history.current,
+          });
           if (stopped()) return;
-          playbookRef.current = [...playbookRef.current, lesson.rule];
-          setPlaybook(playbookRef.current);
+          setPreviousPlaybook(playbookRef.current);
+          playbookRef.current = lesson.playbook;
+          setPlaybook(lesson.playbook);
           setCoach({ kind: "lesson", lesson });
         } catch {
           if (stopped()) return;
@@ -211,7 +220,7 @@ export default function Game() {
           <>
             <DecisionBox decision={decision} status={status} />
             <CoachBox coach={coach} />
-            <Playbook rules={playbook} />
+            <Playbook rules={playbook} previous={previousPlaybook} />
           </>
         ) : (
           <YouBox lastKey={lastKey} />

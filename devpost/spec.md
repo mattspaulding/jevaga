@@ -109,6 +109,7 @@ From `prd.md > Look and Feel`.
 - The route validates the response. A missing answer, or a move outside the five, is an error; the route never guesses.
 
 ### Coach lessons (System 2)
+**Revised during `5-build` (Matt chose "the coach rewrites the playbook" over appending rules):** after each run Nemotron makes exactly one edit, `add`, `replace N` or `remove N`, and the code applies it. The playbook holds at most 4 learned rules above a fixed last line, "Otherwise, jump forward." A new rule about the same situation as an existing one replaces it, so the playbook can't contradict itself; a replace that changes nothing, a rule without a lane or with more than one move, or an exact time window is sent back once. The coach also sees the last 5 runs' distances with the rules each used. The panel says what changed ("Replaced rule 2."). The notes below describe the earlier one-rule-per-run version where they differ.
 `lib/system2/nemotron.ts`, `app/api/lesson/route.ts`. PRD ref: `prd.md > Coach lessons (System 2)`.
 - `POST https://api.tokenfactory.nebius.com/v1/chat/completions`, `Authorization: Bearer NEBIUS_API_KEY`, model `LESSON_MODEL`, `max_tokens: 400`, `temperature: 0.3`, and `"chat_template_kwargs": {"enable_thinking": false}` at the top level of the body. Nemotron 3.5 Lightning thinks by default, and its thinking shares the `max_tokens` budget; `reasoning_effort` isn't a documented switch for it.
 - The system prompt explains the vocabulary and the collision rule and asks for exactly two lines:

@@ -2,7 +2,7 @@
 // Uses the game's own world, describe and model code against real Jev and Nemotron.
 // Run: pnpm lesson-test   (reads keys from .env.local)
 import { describeMoves, describeState } from "../lib/describe";
-import { clearFor, Lane, newWorld, World } from "../lib/game/world";
+import { clearFor, Lane, MOVES, newWorld, targetOf, World } from "../lib/game/world";
 import { jev } from "../lib/system1/jev";
 import type { Decision } from "../lib/system1/types";
 import { writeLesson } from "../lib/system2/nemotron";
@@ -48,10 +48,10 @@ async function withRetry<T>(fn: () => Promise<T>, tries = 5): Promise<T> {
 }
 
 type Placement = "none" | "instructions" | "wait-desc";
-async function ask(world: World, placement: Placement, rule = LESSON): Promise<Decision[]> {
+async function ask(world: World, placement: Placement, rule = LESSON, fullPlaybook?: string[]): Promise<Decision[]> {
   const moves = describeMoves(world);
-  const playbook = ["Jump forward."];
-  if (placement === "instructions") playbook.push(rule);
+  const playbook = fullPlaybook ?? ["Jump forward."];
+  if (!fullPlaybook && placement === "instructions") playbook.push(rule);
   if (placement === "wait-desc") moves.wait += ` Playbook rule: ${rule}`;
   const out: Decision[] = [];
   for (let i = 0; i < REPEATS; i++) out.push(await withRetry(() => jev.decide({ state: describeState(world), moves, playbook })));
@@ -85,22 +85,37 @@ async function main() {
   const lesson = await writeLesson({
     playbook: ["Jump forward."],
     beats: [
-      { state: describeState(FATAL), move: "forward", moveText: describeMoves(FATAL).forward, confidence: results.none.fatal[0].confidence },
+      {
+        state: describeState(FATAL),
+        move: "forward",
+        moveText: describeMoves(FATAL).forward,
+        confidence: results.none.fatal[0].confidence,
+        options: describeMoves(FATAL),
+        safe: MOVES.filter((m) => {
+          const to = targetOf(FATAL.frog, m);
+          return clearFor(FATAL, to.row, to.col, 0, 1.2);
+        }),
+      },
     ],
     cause: "hit",
   });
-  console.log(`\nNemotron (${Date.now() - t} ms):\n  What happened: ${lesson.whatHappened}\n  Rule: ${lesson.rule}\n`);
-  check("Nemotron returned both lines", Boolean(lesson.whatHappened && lesson.rule));
-  check('Nemotron\'s rule uses the game\'s words ("lane +1")', /lane \+1/i.test(lesson.rule));
+  console.log(`\nNemotron (${Date.now() - t} ms):\n  What happened: ${lesson.whatHappened}\n  Playbook:\n${lesson.playbook.map((r, i) => `    ${i + 1}. ${r}`).join("\n")}\n`);
+  check("Nemotron returned what happened and a playbook", Boolean(lesson.whatHappened && lesson.playbook.length));
+  check(`the playbook has at most 4 rules plus the default (${lesson.playbook.length})`, lesson.playbook.length <= 5);
+  console.log(`  coach change: ${lesson.change}`);
+  check('the playbook has a lane +1 rule in the game\'s words', lesson.playbook.some((r) => /lane \+1/i.test(r)));
 
-  // The real loop: Nemotron's own rule, handed to Jev.
-  const own = { fatal: await ask(FATAL, "instructions", lesson.rule), control: await ask(CONTROL, "instructions", lesson.rule) };
-  console.log(`Nemotron's rule FATAL   ${fmt(own.fatal)}`);
+  // The real loop: Nemotron's whole playbook, handed to Jev.
+  const own = {
+    fatal: await ask(FATAL, "instructions", "", lesson.playbook),
+    control: await ask(CONTROL, "instructions", "", lesson.playbook),
+  };
+  console.log(`Nemotron's playbook FATAL   ${fmt(own.fatal)}`);
   console.log(`${"".padEnd(15)} control ${fmt(own.control)}`);
   console.log(
-    majority(own.fatal, "wait") && majority(own.control, "forward")
-      ? "INFO  Nemotron's own rule flips the fatal case and leaves the control alone"
-      : "INFO  Nemotron's own rule did not cleanly flip the fatal case (tune the prompt in slice 3)",
+    !majority(own.fatal, "forward") && majority(own.control, "forward")
+      ? "INFO  Nemotron's playbook keeps the frog out of the car and still goes forward when it's clear"
+      : "INFO  Nemotron's playbook did not cleanly handle both cases",
   );
 
   console.log(failures ? `\n${failures} check(s) failed` : "\nAll checks passed");
