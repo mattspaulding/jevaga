@@ -9,7 +9,7 @@ Build mode: fast (chosen 2026-09-25)
 
 ## Slices
 
-- [ ] **1. A script proves Jev follows a lesson, using the game's own world and wording**
+- [x] **1. A script proves Jev follows a lesson, using the game's own world and wording**
   Becomes usable: `pnpm lesson-test` builds real game situations with the actual world and describe code, asks real Jev with and without a lesson, asks real Nemotron for a lesson, and prints a pass/fail table. The Next.js project exists and builds.
   Why now: The whole idea rests on a written rule changing Jev's move. A one-off curl showed it once; this makes it repeatable, run on the same `world.ts`, `describe.ts`, `jev.ts` and `nemotron.ts` the game will use, so any wording change later can be re-checked in seconds. It is the one allowed "technical" slice: it proves the critical risk and leaves runnable evidence. Project bootstrapping rides along.
   PRD ref: `prd.md > Fast decisions (System 1)`, `prd.md > Coach lessons (System 2)`
@@ -81,3 +81,4 @@ Reflection:
 Activity mode:
 
 ## Revisions
+- Lesson prompt examples can be copied verbatim — in the slice 1 lesson test Nemotron returned the first example rule word for word (it happened to fit that death). Slice 3 must confirm lessons describe the actual death, and drop or vary the examples if they get parroted.
