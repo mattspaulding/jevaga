@@ -7,9 +7,10 @@ import { advance, clearFor, hop, MOVES, targetOf, type Move, type RunEvent, type
 // anyone can hop the frog at any moment (a key press, or Jev's answer landing).
 export const FRAME_MS = 16;
 export const RETRY_MS = 3000;
-// Jev through the gateway sustains roughly 25-30 requests a minute; faster than
-// that and it answers "unavailable". One question a second at most (Matt's call).
-export const MIN_REQUEST_INTERVAL_MS = 1000;
+// On AI Gateway's free tier Jev sustained only ~25-30 requests a minute (it
+// answered 503 beyond that). On the paid tier it held 4 a second with no
+// failures in testing, so ask up to 4 times a second.
+export const MIN_REQUEST_INTERVAL_MS = 250;
 export const REQUEST_TIMEOUT_MS = 2500; // no answer by then counts as an outage, not slowness
 const KEEP_DECISIONS = 6;
 const SAFE_WINDOW_S = 0.6;
