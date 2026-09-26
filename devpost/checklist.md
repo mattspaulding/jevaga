@@ -119,9 +119,19 @@ Build mode: fast (chosen 2026-09-25)
   Learner check: Play a wave in You mode. Can you tell the three enemies apart by how they attack, and does every attack show itself before it lands?
   Commit: `Each enemy kind dives its own way`
 
-- [ ] **12. Carriers, weapons and pickups**
+- [ ] **12. Every wave flies in, and the Cyclops takes two hits**
+  Becomes usable: each wave starts empty; three groups of 7 swoop in single file along paths drawn 1 s ahead, dip to row 9 and climb to their slots; from wave 2 Bats and Cyclopes fire on the way in; dives and volleys wait until the formation is in place. A Cyclops's first hit shuts its eye and the second kills it. Jev reads the fly-in and "hit once, one more shot kills it".
+  Why now: It changes the first seconds of every run and every replay, so it goes in before carriers, the saved learning run and the video. Matt, 2026-09-26.
+  PRD ref: `prd.md > The fight`
+  Spec ref: `spec.md > Enemies, carriers and waves`, `enemy-design.md` sections 2 (Cyclops) and 3
+  Build: entry paths and the `enter`/`settle` phases in `lib/game/world.ts`; hold dives and volleys during the fly-in; entry firing from wave 2; `hp` and the eye-shut Cyclops; fly-in path lines and the shut eye in `lib/game/render.ts`; describe lines; world-check cases.
+  Verify (mechanical): `pnpm world-check` passes with new cases (every enemy reaches its slot, nothing dives or volleys before the formation is in place, the entry never goes below row 9, wave 1 entry never fires and wave 2 does, a Cyclops needs two hits, prediction still matches the real fight, replays still retrace exactly); `pnpm sim -- 5 3` runs; browser pane shows a fly-in with its path lines and no console errors.
+  Learner check: Start a run. Does the fly-in look and feel like Galaga's, and can you tell a Cyclops you've hit once?
+  Commit: `Every wave flies in; the Cyclops takes two hits`
+
+- [ ] **13. Carriers, weapons and pickups**
   Becomes usable: a carrier of each kind uses its weapon (Wingmen, Fan, Eye Beam); shooting it drops the weapon to your row; gliding onto it gives it to you until the wave ends; Jev reads carriers, pickups and the weapon it holds.
-  Why now: Needs the dives from slice 11; the beam needs `threatOnPath` to handle a hazard that lasts.
+  Why now: Needs the dives from slice 11 and the fly-in from slice 12; the beam needs `threatOnPath` to handle a hazard that lasts.
   PRD ref: `prd.md > The fight`
   Spec ref: `spec.md > Enemies, carriers and waves`, `enemy-design.md` section 2 (weapons, carriers and pickups)
   Build: carrier selection, the three weapons both ways, pickup fall/wait/fade, player weapon state, sprites for icons and tokens (Matt's canvas or derived), describe lines.
@@ -129,7 +139,7 @@ Build mode: fast (chosen 2026-09-25)
   Learner check: Shoot a carrier, grab its weapon, and use it. Does it feel worth going for early?
   Commit: `Carriers drop weapons you can use`
 
-- [ ] **13. Waves escalate**
+- [ ] **14. Waves escalate**
   Becomes usable: waves 1 to 6 follow the table in `enemy-design.md` (kinds, divers at once, speed, carriers, escorts, mirrored Drone pairs, fly-in entry), and the swarm rule kicks in when few enemies are left.
   Why now: Needs every kind and weapon in place.
   PRD ref: `prd.md > The fight`
@@ -139,7 +149,7 @@ Build mode: fast (chosen 2026-09-25)
   Learner check: Play to wave 4. Does it get harder in ways you can read?
   Commit: `Waves escalate like Galaga`
 
-- [ ] **14. The Enemy Library**
+- [ ] **15. The Enemy Library**
   Becomes usable: a LIBRARY screen from the panel with a page per enemy (sprites, name, lore, attack, weapon, spot it coming, first seen).
   Why now: The content is settled in `enemy-design.md`; it's quick once the enemies behave as described.
   PRD ref: `prd.md > Enemy Library`
@@ -149,7 +159,7 @@ Build mode: fast (chosen 2026-09-25)
   Learner check: Open the library. Do the pages make you want to meet these enemies?
   Commit: `Add the Enemy Library`
 
-- [ ] **15. It fails honestly and can run offline**
+- [ ] **16. It fails honestly and can run offline**
   Becomes usable: Outage states verified end to end, including during replays; `SYSTEM1=fake` flies with the SIMULATED badge; README explains setup and how Jev and Nemotron are each used; `.env.example` complete.
   Why now: Makes the live URL safe to leave up through judging.
   PRD ref: `prd.md > States and Boundaries`
@@ -209,4 +219,5 @@ Activity mode:
 - The coach's first prompt wrote rules tied to one death or wrong about the game, and the one rule it kept made Jev worse. Added `scripts/coach-bench.ts` to score coach variants on the same saved deaths: how often a rule saves its own death, and how many other deaths it also saves. A prompt that explains what hits the ship, plus a hindsight line per moment, brought the coach close to the hand-written rule (each rule saved 5.1 of 7 other deaths on average, the reference 6 of 8). Nemotron's thinking mode did worse and stays off.
 - Added a USAGE window and the matching totals in the headless scripts, showing what Jev and Nemotron have used and cost this session, at Matt's request for the demo video.
 - An enemy design pass was added before the saved learning run and the video (Matt, 2026-09-26: "they all do the exact same thing... what makes it fun is that all the different enemies have their own different attack patterns"). Researched Galaga and its series, fact-checked, and settled on the "Jevaga enemy design" canvas with an Enemy Library in a playful sci-fi tone; the result is `devpost/enemy-design.md`. Slices 11 to 14 build it; honest failures and offline mode move to slice 15.
-- Slice 11: the dive code stayed in `lib/game/world.ts` instead of a new `enemies.ts`, because the dives need the world's constants at load time and a split would be a circular import. Prediction is now a copy of the fight stepped forward with no new launches, so it names what hits ("Drone in 0.6 s", "Cyclops shot in 0.4 s") and matched the real fight on 47 of 47 test fights. One attack at a time for now (the wave table in slice 13 raises it). Dumb Jev now lasts 10 to 35 s on seed 5 and dies mostly to Cyclops shots: half the formation volleys are aimed at the ship. A reflex that moves when anything is under 1 s away survives a median 38 s, so the aimed shots are learnable, and they're what the coach has to teach first.
+- Slice 11: the dive code stayed in `lib/game/world.ts` instead of a new `enemies.ts`, because the dives need the world's constants at load time and a split would be a circular import. Prediction is now a copy of the fight stepped forward with no new launches, so it names what hits ("Drone in 0.6 s", "Cyclops shot in 0.4 s") and matched the real fight on 47 of 47 test fights. One attack at a time for now (the wave table in slice 14 raises it). Dumb Jev now lasts 10 to 35 s on seed 5 and dies mostly to Cyclops shots: half the formation volleys are aimed at the ship. A reflex that moves when anything is under 1 s away survives a median 38 s, so the aimed shots are learnable, and they're what the coach has to teach first.
+- A fly-in at the start of every wave and a two-hit Cyclops were added as slice 12, ahead of carriers (Matt, 2026-09-26: "they come in from the top and... formation on like an initial attack", and "stronger ones that took more than one hit"). The earlier plan had the formation already in place on wave 1, the fly-in only from wave 3 and on the cut list, and one-hit Cyclopes. Carriers, waves, the Enemy Library and honest failures move to slices 13 to 16.

@@ -47,11 +47,15 @@ Source: `enemy-design.md`, which has every number.
   - **Bat (Waffle):** zigzags down along a dotted line, fires two straight bullets, and commits to where you are once, at row 9.
   - **Cyclops (Winkless):** loops, parks mid-screen above you and fires aimed shots after its eye glows, then drops out through its column.
 - In formation, Bats drop straight bullets, Cyclopes fire aimed shots after a glow, and Drones stay quiet.
+- Every wave starts with a fly-in: three groups of 7 swoop in from the top along paths drawn a second ahead, dip to row 9 as a first attack, and climb to their slots. From wave 2 they fire on the way in. Nothing dives until the formation is in place.
+- A Cyclops takes two hits. The first shuts its eye.
 - Some enemies are carriers. A carrier uses its kind's weapon on you (Drone: Wingmen, Bat: Fan, Cyclops: Eye Beam). Shoot it and the weapon falls to your row; glide onto it and it's yours until the wave ends. A new weapon replaces the old one.
 - Waves escalate: more kinds, more divers at once, faster, escorts and mirrored pairs, and a swarm when few enemies are left.
 - The ship glides along the bottom row and fires straight up, with a short reload between shots.
 - A shot that reaches an enemy destroys it: 100 points, 200 for a diver. A cleared formation brings a new one.
-- [ ] Each kind dives its own way, with its path drawn before it lands.
+- [x] Each kind dives its own way, with its path drawn before it lands.
+- [ ] Every wave flies in along drawn paths before the formation settles.
+- [ ] A Cyclops takes two hits, and Jev can read that one is hit once.
 - [ ] A carrier uses its weapon until it's shot, and the dropped weapon can be grabbed and used until the wave ends.
 - [ ] Waves 1 to 6 follow the escalation table in `enemy-design.md`.
 - [ ] Enemies drift, dive and fire without any input.

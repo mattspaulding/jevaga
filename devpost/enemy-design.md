@@ -11,7 +11,8 @@ Settled with Matt on the "Jevaga enemy design" canvas (https://claude.ai/artifac
 - Each enemy kind has its own attack pattern and its own weapon. Patterns get more intricate and harder as the waves go on, updated with ideas from modern shooters.
 - A carrier uses its weapon against you until it's shot; then the weapon falls to your row and you can grab it. It lasts until the end of the wave.
 - A second weapon replaces the one you hold.
-- The Cyclops takes one hit for now (the two-hit Boss is a later option).
+- ~~The Cyclops takes one hit for now.~~ Changed later the same day: the Cyclops takes two hits, like Boss Galaga ("I remember there being like stronger ones that took more than one hit").
+- Every wave starts with the enemies flying in from the top, from wave 1, and the fly-in is its first attack: "they come in from the top and... formation on like an initial attack. And if you survive the attack, then they go up and they kind of float up at the top." Built before carriers, because it changes the opening of every run and every replay.
 - No challenge wave for now. The Shards (fourth kind) come after the three main kinds feel right.
 - An Enemy Library gives each enemy a page with a name, a little lore and its attack pattern, in a playful, slightly silly sci-fi tone.
 
@@ -94,7 +95,7 @@ Against a Drone you step aside. Against a Bat you keep moving through row 9. Aga
 - *Carrier using it:* at the hover point it skips the aimed shots. A thin orange warning line runs from its eye down to row 13 for 0.8 s, then a beam fills that column for 0.5 s. The column is known from launch, so a player who reads the path line has about 3 s. This is the tractor-beam run, except it kills instead of capturing.
 - *After you grab it:* fire sends a beam up your whole column instantly. It hits everything in that column, formation included (up to 3 enemies). Reload goes from 0.35 s to 0.7 s.
 
-**Optional: two hits.** Like Boss Galaga, the first hit shuts the eye and the second kills. Worth it only if Jev's line can say "Cyclops above you, hit once, one more shot". Cut it early if time is short.
+**Two hits.** Like Boss Galaga (green, then purple), the first hit shuts its eye and the second kills. A Cyclops with its eye shut still fires; the shut eye only says it's one shot from dying. Worth 150 in formation and 400 diving, so the second shot pays. Jev reads "a Cyclops 9 rows up, hit once, one more shot kills it".
 
 ### Carriers and pickups (all three kinds)
 
@@ -103,15 +104,28 @@ Against a Drone you step aside. Against a Bat you keep moving through row 9. Aga
 - Kill a carrier and the icon flips out and falls straight down from where it died at 4 rows/s. It lands on row 13 in the nearest whole column, sits 4 s, blinks through the last 1 s and disappears. Bullets pass through it.
 - You glide onto it to take it. It lasts to the end of the wave.
 
-## 3. Escalation by wave
+## 3. The fly-in
+
+Galaga never starts with the formation in place. Its enemies fly in single file from the top and the sides on looping paths, and take their slots as they arrive. You can shoot them on the way. They hold fire during the entry on stage 1 and fire from stage 2, each stage uses one of three fixed entry patterns, and nobody dives until every survivor is in formation (Namco Wiki; Shoot Em Up wiki).
+
+Here the fly-in is the wave's first attack:
+- The 21 enemies come in as three groups of 7, one kind to a group, single file, about 0.18 s apart. Groups start 1.2 s apart.
+- Each group's path is drawn 1 s before its first enemy appears (Galaga Legions), in its kind's color.
+- The path comes in from a top corner or the top middle, swoops down to its lowest point at row 9, loops back up, and each enemy then climbs to its own slot. Row 9 keeps the pass above the ship's row: it's a pass you shoot at and dodge shots from, never one that rams you.
+- Three entry patterns, cycling by wave, change which kind comes from which side.
+- Wave 1: nobody fires on the way in. From wave 2, each entering Bat drops one straight bullet as it passes row 5 on the way down, and every other entering Cyclops glows its eye for 0.8 s and fires one aimed shot. Drones never fire.
+- Nothing dives and the formation doesn't volley until every survivor has reached its slot, plus 1 s.
+- Shooting an enemy on its way in is worth what it's worth in formation.
+
+## 4. Escalation by wave
 
 Dive interval is today's `diveEvery(wave)`. "Speed" is a multiplier on every dive speed above.
 
 | Wave | Who dives | At once | Dive every | Speed | Carriers | Entry | New this wave |
 |---|---|---|---|---|---|---|---|
-| 1 | Drone, Bat | 1 | 3.0 s | 1.0x | 1 Bat | Formation already in place (as today) | Plunge, Flutter, Fan |
-| 2 | All three | 1 | 2.7 s | 1.0x | 1 Drone | Formation drops in from the top, row by row | Hover, aimed shots, Wingmen |
-| 3 | All three | 1, plus escorts | 2.4 s | 1.05x | 1 Cyclops | Fly-in: two groups enter from the top corners along lines drawn 1 s before (Legions) | Eye Beam. Cyclops dives escorted by 2 Bats in a triangle (they follow its path 1 column out and 1 row behind, then each does its own row 9 commit). Escorted Cyclops kill = double points |
+| 1 | Drone, Bat | 1 | 3.0 s | 1.0x | 1 Bat | Fly-in, nobody fires | Plunge, Flutter, Fan |
+| 2 | All three | 1 | 2.7 s | 1.0x | 1 Drone | Fly-in, Bats and Cyclopes fire on the way in | Hover, aimed shots, Wingmen |
+| 3 | All three | 1, plus escorts | 2.4 s | 1.05x | 1 Cyclops | Fly-in | Eye Beam. Cyclops dives escorted by 2 Bats in a triangle (they follow its path 1 column out and 1 row behind, then each does its own row 9 commit). Escorted Cyclops kill = double points |
 | 4 | All three | 2 | 2.2 s | 1.1x | 1 Bat, 1 Drone | Fly-in | Mirrored Drone pairs: two Drones rev together, one takes your column c, the other takes 8-c (c+2 if you're in the middle). Drones' second pass |
 | 5 | Nobody dives at you | n/a | n/a | 1.1x | none | 3 groups of 7 fly across on drawn lines | **Challenge wave** (Galaga's Challenging Stage, as a breather). No firing. Clear a whole group for a bonus, all 21 for a big one. If cut, wave 5 plays like wave 4 with 3 carriers |
 | 6 | All three | 2 | 1.8 s | 1.15x | 1 of each | Fly-in | **Transform**: once per wave, a Drone mid-plunge splits at row 5 into 3 Shards (4th kind, see below) |
@@ -129,16 +143,16 @@ Dive interval is today's `diveEvery(wave)`. "Speed" is a multiplier on every div
 
 **A 4th kind: the Shard.** Galaga's transforms (a Bee turns into three bonus enemies from stage 4) and Galaga '88's splitters both point here. From wave 6, one Drone per wave splits at row 5 into three Shards. They fall straight down columns c-1, c and c+1 at 3 rows/s and never fire. 500 points each, 1,500 more for all three. Mostly a scoring chance, and the splitting Drone's column line already tells you where they'll fall. **Sprite needed:** one small Shard (a third of a Drone, silver-blue), two frames of spin. No dive pose. If a 4th kind feels like too much, cut it. Nothing else depends on it.
 
-## 4. Modern touches
+## 5. Modern touches
 
-1. **Path lines before a dive (Galaga Legions DX).** Legions draws each wave's flight paths in neon an instant before launch. Here every dive's path is drawn when it launches: silver column for a Drone, dotted zigzag for a Bat, loop and hover point for a Cyclops. The same geometry goes into Jev's text, so the line and the sentence can't disagree.
+1. **Path lines before a dive (Galaga Legions DX).** Legions draws each wave's flight paths in neon an instant before launch. Here every fly-in path is drawn 1 s before its group appears, and every dive's path is drawn when it launches: silver column for a Drone, dotted zigzag for a Bat, loop and hover point for a Cyclops. The same geometry goes into Jev's text, so the line and the sentence can't disagree.
 2. **Warning line before a beam (Cuphead, and danmaku convention).** Every Cuphead boss attack has a tell before it fires. Danmaku games show a thin line for about a beat before a laser. The Eye Beam gets 0.8 s of line, set by Jev's reaction time, not by feel.
 3. **Weapon token that blinks out (Nex Machina).** Nex Machina's secondary weapon token cycles visibly and fades if you don't grab it in time. Ours doesn't cycle (one kind, one weapon) but keeps the fade: 4 s on the floor, blinking the last second. Grabbing it is a risk you can see the clock on.
 4. **Satellites that fire with you (Galaga Legions).** The Blowneedle's two satellites fire whenever the main gun does. Wingmen are that, with a Dual Fighter twist: each one absorbs one hit.
 5. **Color by kind (Ikaruga).** Ikaruga makes dense screens readable by giving everything one of two colors. Here every bullet, line and beam takes its enemy's color: orange for Cyclops, red for Bat, silver for Drone. A glance tells you who fired.
 6. **Mirrored pairs (Galaxian, Galaga Legions).** Galaxians dive alone, in pairs, or three at a time. Legions' satellites can be mirrored. Wave 4's Drone pairs mirror around the middle column, so two threats read as one shape.
 
-## 5. What Jev reads
+## 6. What Jev reads
 
 Most important change: today `threatOnPath` reports `by: "bullet" | "diver"`. It should report the kind: "Drone in 0.6 s", "Bat bullet in 0.4 s", "Cyclops beam in 0.9 s". Without the name the coach can't write a rule about a specific enemy, which is the whole reason for this change.
 
@@ -159,10 +173,12 @@ New sentences, one per behavior:
 | Escorted Cyclops | "Cyclops with 2 Bat escorts, over x 3 to 5." | Follows from the above. |
 | Pickup on floor | "Fan weapon on the floor at x 6, gone in 2.5 s. Nothing arrives there for 1.8 s." | None. It's an opportunity, and the line pairs it with the threat check so Jev doesn't glide into a bullet for it. |
 | Holding a weapon | "Your weapon: Eye Beam, reload 0.7 s." / "Wingmen: left gone, right ready." | **Flag** for Wingmen: a hit on a wingman isn't a death. The threat check has to know which hits the wingmen take. |
+| Fly-in | "Arriving: 7 Bats swooping in from the top left, lowest at row 9 near x 3.0, dropping bullets as they pass row 5. Nothing dives until the formation is in place." | None. Every path is fixed when the wave starts. |
+| Cyclops hit once | "a Cyclops 9 rows up, hit once, one more shot kills it" | None. |
 | Carrier in formation | "Carrier: the Bat at x 5, row 2, holding Fan, dives second." | None. |
 | Swarm | "Swarm: 3 left, none return to formation." | Small: more simultaneous dives. |
 
-## 6. What the coach might learn
+## 7. What the coach might learn
 
 These are the kind of rules Nemotron could write once deaths name an enemy:
 
@@ -171,20 +187,21 @@ These are the kind of rules Nemotron could write once deaths name an enemy:
 3. "Don't stand still under a zigzagging Bat. Be gliding when it reaches row 9 so it commits to a spot you're leaving."
 4. "If a carrier is above you and the gun is ready, shoot it before anything else in the formation."
 5. "Only glide to a dropped weapon if nothing reaches that spot for at least 1 s."
+6. "If a Cyclops above you is hit once, fire again before moving on to another target."
 
-## 7. Sprites and effects needed
+## 8. Sprites and effects needed
 
 **Sprites**
 - Drone: rev frame (spikes spun).
 - Mini-drone, about half a Drone. The same sprite is used for enemy escorts and for your Wingmen.
 - Ship with Wingmen attached, or the mini-drone drawn beside the ship.
-- Cyclops: eye-glow frame. Eye-shut frame only if the two-hit option stays.
+- Cyclops: eye-glow frame and eye-shut frame (drawn in code until designed).
 - Carrier icons, 3: eye, fan, wings. Small, sitting under the carrier.
 - Pickup tokens: the same 3 icons, larger, with a flip-out frame and a blink state.
 - Shard (4th kind), 2 frames. Optional.
 
 **Effects**
-- Path lines: silver column (Drone), dotted red zigzag (Bat), orange loop to hover point (Cyclops). Carrier Drone's line 3 columns wide.
+- Path lines: silver column (Drone), dotted red zigzag (Bat), orange loop to hover point (Cyclops), and each fly-in group's path in its kind's color. Carrier Drone's line 3 columns wide.
 - Bat commit arrow at row 9.
 - Eye Beam: thin warning line, then a full-column beam, in orange for the enemy and a different color for yours.
 - Bullets tinted by kind: orange aimed shot, red straight and fan bullets.
@@ -195,11 +212,12 @@ These are the kind of rules Nemotron could write once deaths name an enemy:
 
 ## Build order, and what to cut
 
-- **Session 1:** the three dives, path lines, kind-named threats in `describe.ts`, formation habits (Bat straight, Cyclops aimed, Drone silent). This alone gives the coach enemy-specific deaths.
-- **Session 2:** carriers, the three weapons both ways, pickups, the beam as a column hazard in `threatOnPath`.
-- **Session 3:** the wave table, escorts, mirrored pairs, fly-in entry, the swarm rule.
+- **Session 1 (built):** the three dives, path lines, kind-named threats in `describe.ts`, formation habits (Bat straight, Cyclops aimed, Drone silent). This alone gives the coach enemy-specific deaths.
+- **Session 2:** the fly-in every wave, and the two-hit Cyclops.
+- **Session 3:** carriers, the three weapons both ways, pickups, the beam as a column hazard in `threatOnPath`.
+- **Session 4:** the wave table, escorts, mirrored pairs, the swarm rule.
 
-If it's too much, cut in this order: challenge wave, Shards, Cyclops two hits, fly-in entry (keep the formation appearing as today), Wingmen absorbing hits (they just fire). Even after all of those cuts, you still have three enemies that play differently, each with its own weapon.
+If it's too much, cut in this order: challenge wave, Shards, Wingmen absorbing hits (they just fire). Even after all of those cuts, you still have three enemies that play differently, each with its own weapon.
 
 ## The Enemy Library
 
@@ -241,9 +259,9 @@ The Fleet runs like a mid-size company, with Fleet Command as management. Each e
 
 **Name:** Winkless (runner-up: Gawkeye)
 
-**Lore:** Winkless got into management because it never blinks in meetings. It does one lap of the room and then parks above you to stare. Its eye lights up before every shot, which the rest of the Fleet considers oversharing. When the meeting's over it leaves through the floor.
+**Lore:** Winkless got into management because it never blinks in meetings. It does one lap of the room and then parks above you to stare. Its eye lights up before every shot, which the rest of the Fleet considers oversharing. Hit it once and it finally blinks, and it takes a second shot to end the meeting. When the meeting's over it leaves through the floor.
 
-**How it attacks:** When it launches it picks the column you're in, and after one small loop it parks halfway down that column. It fires twice, each time at where you are at the moment it fires, and the shot flies straight without turning. Then it drops straight down that column on its way out, so leave the column before it does.
+**How it attacks:** When it launches it picks the column you're in, and after one small loop it parks halfway down that column. It fires twice, each time at where you are at the moment it fires, and the shot flies straight without turning. Then it drops straight down that column on its way out, so leave the column before it does. It takes two hits. After the first its eye stays shut, but it keeps shooting.
 
 **Its weapon (Eye Beam):** A carrier Winkless skips the aimed shots. A thin orange warning line runs down its column for 0.8 seconds, then a beam fills that column for half a second. Grab it and your shot becomes an instant beam up your whole column that hits everything in it, up to 3 enemies, but your reload doubles from 0.35 to 0.7 seconds.
 
