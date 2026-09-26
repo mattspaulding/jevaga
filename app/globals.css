@@ -50,3 +50,11 @@ html, body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.4
 .controls { display: flex; gap: 8px; }
 .controls button { font: inherit; padding: 8px 16px; background: var(--panel); color: var(--ink); border: 2px solid var(--ink); cursor: pointer; }
 .controls button:disabled { opacity: 0.4; cursor: default; }
+.coach { border-color: var(--coach); }
+.coach p { margin: 0; }
+.thinking { color: var(--coach); animation: pulse 1s ease-in-out infinite; }
+.happened { color: var(--muted); margin-bottom: 6px !important; }
+.rule { color: var(--ink); }
+.playbook li.fresh { animation: flash 1s ease-out; }
+@keyframes pulse { 50% { opacity: 0.4; } }
+@keyframes flash { 0% { background: var(--coach); color: #1b1b28; } 100% { background: transparent; } }

@@ -29,7 +29,7 @@ Build mode: fast (chosen 2026-09-25)
   Learner check: Open http://localhost:3000, press Start, and watch one run. Does the frog go straight into traffic on "Jump forward"? Does the pace feel watchable, and is it clear what Jev is choosing each beat?
   Commit: `Jev plays the frog on an endless road`
 
-- [ ] **3. The coach teaches after every run and the frog gets better**
+- [x] **3. The coach teaches after every run and the frog gets better**
   Becomes usable: When a run ends, the Coach box shows Nemotron thinking, then "What happened" and a new rule; the rule appears in the numbered playbook, and the next run replays the same road with the whole playbook. Runs continue until Stop, with distances listed and the best starred.
   Why now: This is the kernel. It comes as soon as there is a run to learn from, so the most important part gets the most time to tune.
   PRD ref: `prd.md > The Core Journey` (steps 5-7), `prd.md > Coach lessons (System 2)`, `prd.md > Run history`, `prd.md > States and Boundaries`
@@ -83,3 +83,7 @@ Activity mode:
 ## Revisions
 - Lesson prompt examples can be copied verbatim — in the slice 1 lesson test Nemotron returned the first example rule word for word (it happened to fit that death). Slice 3 must confirm lessons describe the actual death, and drop or vary the examples if they get parroted.
 - Session state lives in `components/Game.tsx`, loaded client-only from `app/page.tsx` — Next 16's lint rule forbids setting state in an effect, and the game needs the URL seed and a random seed on first render, which only exist in the browser.
+- Mid-run Jev retry moved from slice 5 into slice 3 — Jev through the gateway returned 503s every few minutes during slice 3 testing, which froze runs and blocked verification. The first move also gets three quick tries before "Jev unavailable".
+- The coach gets hindsight from the replay (all five options at the fatal beat, which moves would have survived, the earlier beat if the frog was trapped), and rules whose move wouldn't have saved the frog are sent back — without it, Nemotron wrote rules like "go back into the car" that took seed 13 from 22 back down to 2 for four straight runs.
+- Repeat detection compares a rule's lanes, timing and move instead of word overlap — word overlap called "lane -1 … wait" a repeat of "lane +1 … wait" and blocked correct rules.
+- Added `scripts/sim.ts` (headless runs with real models) — tuning through the browser was too slow; runs sequentially because parallel sims hit Jev's 429 rate limit.

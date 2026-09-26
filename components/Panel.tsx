@@ -3,8 +3,43 @@
 import type { RunEnd } from "@/lib/game/loop";
 import { MOVES } from "@/lib/game/world";
 import type { Decision } from "@/lib/system1/types";
+import type { Lesson } from "@/lib/system2/nemotron";
 
-export type Status = "idle" | "starting" | "running" | "stopped" | "error";
+export type Status = "idle" | "starting" | "running" | "retrying" | "coaching" | "stopped" | "error";
+export type Coach = { kind: "idle" } | { kind: "thinking" } | { kind: "lesson"; lesson: Lesson } | { kind: "failed" };
+
+export function CoachBox({ coach }: { coach: Coach }) {
+  return (
+    <section className="box coach" aria-label="Nemotron coach">
+      <h2>NEMOTRON · Nebius Token Factory</h2>
+      {coach.kind === "idle" && <p className="muted">Watching. Teaches after each run.</p>}
+      {coach.kind === "thinking" && <p className="thinking">thinking…</p>}
+      {coach.kind === "failed" && <p className="warn">Couldn&apos;t write a lesson this time.</p>}
+      {coach.kind === "lesson" && (
+        <>
+          <p className="happened">{coach.lesson.whatHappened}</p>
+          <p className="rule">New rule: {coach.lesson.rule}</p>
+        </>
+      )}
+    </section>
+  );
+}
+
+// Numbered rules; the newest flashes when it lands (keyed by count, so it replays).
+export function Playbook({ rules }: { rules: string[] }) {
+  return (
+    <section className="box playbook" aria-label="Playbook">
+      <h2>PLAYBOOK</h2>
+      <ol>
+        {rules.map((r, i) => (
+          <li key={`${i}-${rules.length}`} className={i === rules.length - 1 && i > 0 ? "fresh" : ""}>
+            {r}
+          </li>
+        ))}
+      </ol>
+    </section>
+  );
+}
 
 export function DecisionBox({ decision, status, error }: { decision: Decision | null; status: Status; error: string | null }) {
   return (
@@ -12,6 +47,8 @@ export function DecisionBox({ decision, status, error }: { decision: Decision | 
       <h2>JEV · via Vercel AI Gateway</h2>
       {status === "error" ? (
         <p className="warn">Jev unavailable. {error}</p>
+      ) : status === "retrying" ? (
+        <p className="warn">Jev unavailable, retrying…</p>
       ) : decision ? (
         <>
           <p className="pick">
@@ -57,7 +94,7 @@ export function RunHistory({ runs, current, seed }: { runs: (RunEnd & { n: numbe
 }
 
 export function Controls({ status, onStart, onStop }: { status: Status; onStart: () => void; onStop: () => void }) {
-  const busy = status === "running" || status === "starting";
+  const busy = status === "running" || status === "starting" || status === "coaching" || status === "retrying";
   return (
     <div className="controls">
       <button onClick={onStart} disabled={busy}>Start</button>

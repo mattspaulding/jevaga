@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "world-check": "tsx scripts/world-check.ts",
-    "lesson-test": "tsx --env-file=.env.local scripts/lesson-test.ts"
+    "lesson-test": "tsx --env-file=.env.local scripts/lesson-test.ts",
+    "sim": "tsx --env-file=.env.local scripts/sim.ts"
   },
   "dependencies": {
     "next": "16.3.6",

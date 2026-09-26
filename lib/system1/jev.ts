@@ -22,7 +22,10 @@ export const jev: System1 = {
       signal: AbortSignal.timeout(10_000),
     });
     const body = await res.json().catch(() => null);
-    if (!res.ok) throw new JevError(`Jev returned ${res.status}${body?.error_type ? ` (${body.error_type})` : ""}`);
+    if (!res.ok) {
+      const detail = body?.error_type || body?.error?.type || body?.error?.message || "";
+      throw new JevError(`Jev returned ${res.status}${detail ? ` (${String(detail).slice(0, 120)})` : ""}`);
+    }
 
     const answer = body?.answers?.move;
     const move = answer?.choice as Move;

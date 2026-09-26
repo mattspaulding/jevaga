@@ -35,6 +35,18 @@ const check = (name: string, ok: boolean) => {
 check("game rules agree: forward is fatal in the fatal case", isHit(FATAL.rows[1], 4, 0));
 check("game rules agree: forward is safe in the control case", !isHit(CONTROL.rows[1], 4, 0));
 
+// Jev through the gateway has short outages; retry a few times before failing.
+async function withRetry<T>(fn: () => Promise<T>, tries = 5): Promise<T> {
+  for (let i = 1; ; i++) {
+    try {
+      return await fn();
+    } catch (e) {
+      if (i >= tries) throw e;
+      await new Promise((r) => setTimeout(r, 2000 * i));
+    }
+  }
+}
+
 type Placement = "none" | "instructions" | "wait-desc";
 async function ask(world: World, placement: Placement, rule = LESSON): Promise<Decision[]> {
   const moves = describeMoves(world);
@@ -42,7 +54,7 @@ async function ask(world: World, placement: Placement, rule = LESSON): Promise<D
   if (placement === "instructions") playbook.push(rule);
   if (placement === "wait-desc") moves.wait += ` Playbook rule: ${rule}`;
   const out: Decision[] = [];
-  for (let i = 0; i < REPEATS; i++) out.push(await jev.decide({ state: describeState(world), moves, playbook }));
+  for (let i = 0; i < REPEATS; i++) out.push(await withRetry(() => jev.decide({ state: describeState(world), moves, playbook })));
   return out;
 }
 const fmt = (ds: Decision[]) => {
@@ -72,7 +84,9 @@ async function main() {
   const t = Date.now();
   const lesson = await writeLesson({
     playbook: ["Jump forward."],
-    beats: [{ state: describeState(FATAL), move: "forward", confidence: results.none.fatal[0].confidence }],
+    beats: [
+      { state: describeState(FATAL), move: "forward", moveText: describeMoves(FATAL).forward, confidence: results.none.fatal[0].confidence },
+    ],
     cause: "hit",
   });
   console.log(`\nNemotron (${Date.now() - t} ms):\n  What happened: ${lesson.whatHappened}\n  Rule: ${lesson.rule}\n`);

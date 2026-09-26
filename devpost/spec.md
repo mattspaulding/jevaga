@@ -72,6 +72,7 @@ From `prd.md > Look and Feel`.
 ### Beat loop
 `lib/game/loop.ts`. PRD ref: `prd.md > The Core Journey`.
 - `await getMove()` → `step()` → render → wait until at least 350 ms have passed since the last beat → repeat. The minimum keeps the video watchable when Jev answers fast. One move request in flight at a time.
+- **Jev outages** (added in build): the first move gets three tries a second apart; after that a failure means "Jev unavailable" and the game doesn't start. Mid-run failures pause the loop, show "Jev unavailable, retrying…", and retry every 3 seconds until Jev answers or Stop.
 - **Run ends** on `hit`, or `stalled` when the furthest row hasn't grown in 15 beats. A stall is sent to the coach like a death, so it can teach the frog when to go. The run history marks it as a timeout.
 - Keeps `currentRunBeats`, the last 6 `BeatLog`s, for the lesson request.
 
@@ -109,6 +110,7 @@ From `prd.md > Look and Feel`.
   `What happened: <one sentence>`
   `Rule: <one rule, 20 words or fewer, in the game's vocabulary, that would have prevented this and doesn't repeat an existing rule>`
   The user message holds the current playbook, the last 6 beats and the cause (`hit` or `stalled`).
+- **Hindsight from the replay** (added in build): each beat log also carries all five move descriptions and the moves that would have survived that beat and the next. The coach is shown the five options at the fatal beat and which moves would have kept the frog alive; if the frog was already trapped, it is pointed at the latest earlier beat where a safe move existed. A rule whose move would not have saved the frog, or that repeats an existing rule (same lanes, timing and move), is sent back once; a second miss counts as a failed lesson. "Back" is only offered when it was the only way out. The coach still only writes words; Jev has to follow them.
 - Plain-text reply; no JSON mode, since none of the Nemotron models on Token Factory is tagged for it. **Parsing:** if `finish_reason` is `"length"` and the content is empty, the lesson failed. Otherwise strip everything up to and including a last `</think>` if present, ignore any `reasoning`/`reasoning_content` fields, and read the `What happened:` and `Rule:` lines. The rule is capped at 140 characters.
 
 ### Panel
@@ -167,7 +169,9 @@ The playbook starts as `["Jump forward."]`. The seed comes from `?seed=` or is c
 │   └── system2/
 │       └── nemotron.ts       # lesson writer via Nebius Token Factory
 ├── scripts/
-│   └── lesson-test.ts        # build step 1: does a lesson change Jev's move?
+│   ├── lesson-test.ts        # build step 1: does a lesson change Jev's move?
+│   ├── world-check.ts        # game-rule assertions
+│   └── sim.ts                # headless runs with real Jev and Nemotron: pnpm sim -- <seed> <runs>
 ├── .env.example              # names of every env var, no values
 ├── README.md                 # what it is, setup, how to run, how each model is used
 ├── LICENSE                   # MIT or Apache-2.0
