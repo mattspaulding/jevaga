@@ -1,8 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import arcade from "@/lib/game/voices/arcade";
+import juicy from "@/lib/game/voices/juicy";
 import { montage } from "@/lib/game/voices/montage";
+import sfxr from "@/lib/game/voices/sfxr";
 import { SOUND_BRIEF, SOUND_NAMES, type SoundName, type VoiceSet } from "@/lib/game/voices/types";
+import v1 from "@/lib/game/voices/v1";
 
 // Every candidate voice set side by side. Click to hear a sound, "×4" to hear
 // its four variants in a row the way repeats sound in a fight, pick the best
@@ -10,6 +14,7 @@ import { SOUND_BRIEF, SOUND_NAMES, type SoundName, type VoiceSet } from "@/lib/g
 
 const SETS = ["v1", "arcade", "sfxr", "juicy"] as const;
 type SetName = (typeof SETS)[number];
+const VOICE_SETS: Record<SetName, VoiceSet> = { v1, arcade, sfxr, juicy };
 const KINDS = [
   ["Cyclops", 0],
   ["Bat", 1],
@@ -18,7 +23,7 @@ const KINDS = [
 const VOLUME = 0.5; // the game's master volume
 
 export default function SoundLab() {
-  const [sets, setSets] = useState<Partial<Record<SetName, VoiceSet | "missing">>>({});
+  const sets = VOICE_SETS;
   const [picks, setPicks] = useState<Record<string, string>>({});
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [saved, setSaved] = useState<string | null>(null);
@@ -26,10 +31,6 @@ export default function SoundLab() {
   const buffers = useRef(new Map<string, AudioBuffer>());
 
   useEffect(() => {
-    for (const name of SETS)
-      import(`@/lib/game/voices/${name}`)
-        .then((m) => setSets((s) => ({ ...s, [name]: m.default as VoiceSet })))
-        .catch(() => setSets((s) => ({ ...s, [name]: "missing" })));
     fetch("/api/sound-picks")
       .then((r) => r.json())
       .then((j) => {
@@ -74,8 +75,6 @@ export default function SoundLab() {
 
   const cell = (name: SetName, sound: SoundName) => {
     const set = sets[name];
-    if (set === undefined) return <span className="labMuted">loading…</span>;
-    if (set === "missing") return <span className="labMuted">not built yet</span>;
     const kinds = sound === "pop" || sound === "swoop";
     return (
       <div className="labCell">
@@ -114,11 +113,9 @@ export default function SoundLab() {
             {SETS.map((s) => (
               <th key={s}>
                 {s}
-                {sets[s] && sets[s] !== "missing" && (
-                  <button className="labPlay labMontage" onClick={() => playMontage(sets[s] as VoiceSet)}>
-                    ▶ 12 s fight
-                  </button>
-                )}
+                <button className="labPlay labMontage" onClick={() => playMontage(sets[s])}>
+                  ▶ 12 s fight
+                </button>
               </th>
             ))}
             <th>Note</th>
