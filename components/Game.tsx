@@ -19,6 +19,7 @@ import {
 import { describe } from "@/lib/describe";
 import { driveWithJev, startRun, type Run, type RunEnd } from "@/lib/game/loop";
 import { randomSeed } from "@/lib/game/rng";
+import { sound } from "@/lib/game/sound";
 import { newWorld, resetRun, SUBSTEP, type Move, type World } from "@/lib/game/world";
 import { afterDeath, Cancelled, emptyBook, type Book, type JudgeStep, type Verdict } from "@/lib/learn/judge";
 import { createRecorder, type Death } from "@/lib/learn/recorder";
@@ -92,6 +93,34 @@ export default function Game() {
   const [banner, setBanner] = useState<string | null>(null); // "HIT · RUN 4 OVER", shown until the next run starts
   const [bannerTone, setBannerTone] = useState<"hit" | "good">("hit");
   const [replaying, setReplaying] = useState(false);
+  const replayingRef = useRef(false);
+  // Sound starts on unless muted before in this browser; read after mount so the first render matches the server's.
+  const [soundOn, setSoundOn] = useState(true);
+  useEffect(() => {
+    setSoundOn(!sound.isMuted());
+    // In development, the voices can be checked from the console: await jevagaSound.render("boom")
+    if (process.env.NODE_ENV !== "production") Object.assign(window, { jevagaSound: sound });
+  }, []);
+  const toggleSound = useCallback(() => {
+    sound.unlock();
+    const on = sound.isMuted();
+    sound.setMuted(!on);
+    setSoundOn(on);
+  }, []);
+  // M mutes and unmutes in either mode; any key or click can unlock sound.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      sound.unlock();
+      if (!e.metaKey && !e.ctrlKey && !e.altKey && (e.key === "m" || e.key === "M") && !(e.target instanceof HTMLInputElement)) toggleSound();
+    };
+    const onClick = () => sound.unlock();
+    window.addEventListener("keydown", onKey);
+    window.addEventListener("pointerdown", onClick);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("pointerdown", onClick);
+    };
+  }, [toggleSound]);
   // Each Start gets a run id; Stop bumps it, so an older loop still awaiting
   // something sees it has been stopped and never touches the page again.
   const runId = useRef(0);
@@ -157,6 +186,7 @@ export default function Game() {
     const w = resetRun(base);
     worldRef.current = w;
     hitRef.current = false;
+    replayingRef.current = false;
     setBanner(null);
     setBannerTone("hit");
     setReplaying(false);
@@ -172,6 +202,7 @@ export default function Game() {
     (death: Death, result: ReplayResult, stopped: () => boolean) =>
       new Promise<void>((resolve) => {
         const pb = playback(death, result);
+        replayingRef.current = true;
         worldRef.current = pb.world;
         hitRef.current = false;
         setBanner(null);
@@ -305,15 +336,18 @@ export default function Game() {
               setTimeout(() => setFreshRule(null), 1200);
             }
             // Show the replay that was tested (with the kept rule, or the last rule tried).
+            // A chime when a rule is kept, a buzz when the one tried is thrown out.
+            const verdictSound = v.kind === "kept" ? "kept" : v.kind === "didnt-hold" ? "reject" : null;
             if (v.shown) {
               await playReplay(v.death, v.shown.result, stopped);
               if (stopped()) return;
               const survived = v.shown.result.outcome === "survived";
               setBannerTone(survived ? "good" : "hit");
               setBanner(survived ? "REPLAY · SURVIVED" : "REPLAY · HIT");
+              if (verdictSound) sound.play({ name: verdictSound });
               await sleep(REPLAY_BANNER_MS);
               if (stopped()) return;
-            }
+            } else if (verdictSound) sound.play({ name: verdictSound });
           } catch (e) {
             if (e instanceof Cancelled || stopped()) return;
             setJudgeStep(null);
@@ -329,6 +363,7 @@ export default function Game() {
   const start = useCallback(() => {
     const id = ++runId.current;
     const stopped = () => runId.current !== id;
+    sound.unlock();
     setError(null);
     return mode === "you" ? startYou(stopped) : startJev(stopped);
   }, [mode, startYou, startJev]);
@@ -337,6 +372,7 @@ export default function Game() {
     runId.current++;
     runRef.current?.stop();
     setJudgeStep(null);
+    replayingRef.current = false;
     setReplaying(false);
     setStatus("stopped");
   }, []);
@@ -352,7 +388,7 @@ export default function Game() {
 
   return (
     <main className="layout">
-      <GameCanvas worldRef={worldRef} hitRef={hitRef} score={score} who={mode} banner={banner} bannerTone={bannerTone} replaying={replaying} />
+      <GameCanvas worldRef={worldRef} hitRef={hitRef} replayingRef={replayingRef} score={score} who={mode} banner={banner} bannerTone={bannerTone} replaying={replaying} />
       <aside className="panel">
         <div className="titleRow">
           <h1 className="title">JEVAGA</h1>
@@ -381,6 +417,8 @@ export default function Game() {
           onStop={stop}
           onForget={mode === "jev" ? forget : undefined}
           canForget={book.rules.length > 0 || book.deaths.length > 0}
+          soundOn={soundOn}
+          onSound={toggleSound}
         />
       </aside>
     </main>

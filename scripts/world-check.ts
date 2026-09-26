@@ -1,6 +1,7 @@
 // Checks the shooter's rules that the game, Jev's descriptions and the tests depend on.
 // Run: pnpm world-check
 import { describe, describeFight, describeMoves } from "../lib/describe";
+import { createCueTracker, type Cue } from "../lib/game/cues";
 import { LETTERS, SPRITES } from "../lib/game/sprites";
 import { createRecorder, type Death } from "../lib/learn/recorder";
 import { playback, replay } from "../lib/learn/replay";
@@ -495,6 +496,49 @@ function immortal(w: World) {
   const drone = find(v, 2, 4);
   until(v, () => drone.diving?.phase === "fall" && drone.diving.y > 9);
   check(`a falling Drone reads as "Drone in …" (${describeMoves(v).stay})`, /Here: Drone in \d\.\d s/.test(describeMoves(v).stay));
+}
+
+// Sound cues come off the fight frame by frame: one per thing that happened, none for a swapped-in replay.
+{
+  const w = newWorld(5);
+  const cues = createCueTracker();
+  const heard: Record<string, number> = {};
+  const hear = (cs: Cue[]) => cs.forEach((c) => (heard[c.name] = (heard[c.name] ?? 0) + 1));
+  hear(cues.update(w));
+  let fired = 0;
+  let hits = 0;
+  let launched = { rev: 0, flutter: 0, loop: 0 };
+  let wounded = 0;
+  let waves = 1;
+  for (let i = 0; i < 120 / 0.02; i++) {
+    if (i % 14 === 0) {
+      const before = w.ship.reloadUntil;
+      act(w, (["fire", "left", "fire", "right", "fire", "stay"] as const)[(i / 14) % 6]);
+      if (w.ship.reloadUntil !== before) fired++;
+    }
+    const hp = new Map(w.enemies.map((e) => [e.id, e.hp]));
+    const wave = w.wave;
+    stepN(w, 1);
+    if (w.wave !== wave) waves++;
+    else for (const e of w.enemies) if (e.kind === 0 && hp.get(e.id) === 2 && e.hp === 1) wounded++;
+    for (const e of w.enemies)
+      if (e.diving && e.diving.since === w.t && ["rev", "flap", "open"].includes(e.diving.phase))
+        launched = { ...launched, [({ rev: "rev", flap: "flutter", open: "loop" } as Record<string, "rev" | "flutter" | "loop">)[e.diving.phase]]: launched[({ rev: "rev", flap: "flutter", open: "loop" } as Record<string, "rev" | "flutter" | "loop">)[e.diving.phase]] + 1 };
+    if (!w.alive) hits++;
+    hear(cues.update(w));
+    if (!w.alive) {
+      immortal(w); // a real hit ends the run; here the fight goes on, and the next frame sees the ship alive again
+      hear(cues.update(w));
+    }
+    if (i % 3 === 0) hear(cues.update(w)); // frames and steps don't line up; a second look changes nothing
+  }
+  const n = (k: string) => heard[k] ?? 0;
+  check(`one start cue, then a shot cue per shot fired (${n("shot")} of ${fired})`, n("start") === 1 && n("shot") === fired && fired > 50);
+  check(`a pop per kill (${n("pop")} of ${w.kills}), a tink per first Cyclops hit (${n("tink")} of ${wounded})`, n("pop") === w.kills && w.kills > 10 && n("tink") === wounded);
+  check(`a boom per hit (${n("boom")} of ${hits}), three swoops per fly-in (${n("swoop")} over ${waves} waves)`, n("boom") === hits && hits > 0 && n("swoop") === 3 * waves);
+  check(`a rev per Drone dive (${n("rev")}/${launched.rev}), a flutter per Bat (${n("flutter")}/${launched.flutter}), a loop per Cyclops (${n("loop")}/${launched.loop})`, n("rev") === launched.rev && n("flutter") === launched.flutter && n("loop") === launched.loop && launched.rev > 0);
+  const copy = structuredClone(w);
+  check("swapping in a replay's world gives one rewind cue and nothing for what's already on screen", JSON.stringify(cues.update(copy, true)) === JSON.stringify([{ name: "rewind" }]) && cues.update(copy, true).length === 0);
 }
 
 // The sprite grids copied from the design canvas are well formed.

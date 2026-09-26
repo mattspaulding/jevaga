@@ -157,12 +157,16 @@ export function Controls({
   onStop,
   onForget,
   canForget = false,
+  soundOn,
+  onSound,
 }: {
   status: Status;
   onStart: () => void;
   onStop: () => void;
   onForget?: () => void; // Jev mode only; undefined hides the button
   canForget?: boolean; // anything learned to forget
+  soundOn: boolean;
+  onSound: () => void;
 }) {
   const busy = status === "running" || status === "starting" || status === "retrying" || status === "between";
   return (
@@ -178,6 +182,9 @@ export function Controls({
           FORGET RULES
         </button>
       )}
+      <button className="btn btnQuiet" onClick={onSound} aria-pressed={soundOn} title="Sound on or off (M)">
+        SOUND {soundOn ? "ON" : "OFF"}
+      </button>
     </div>
   );
 }

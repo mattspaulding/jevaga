@@ -129,7 +129,7 @@ Build mode: fast (chosen 2026-09-25)
   Learner check: Start a run. Does the fly-in look and feel like Galaga's, and can you tell a Cyclops you've hit once?
   Commit: `Every wave flies in; the Cyclops takes two hits`
 
-- [ ] **13. The fight has sound**
+- [x] **13. The fight has sound**
   Becomes usable: retro sound effects made in code with the browser's Web Audio API: your shot, enemy pops by kind, the Cyclops's tink when its eye shuts, the ship's explosion, a Drone's rev, a Bat's commit chirp, the Cyclops's rising glow and zap, Bat bullets, a swoop for each fly-in group, a jingle at the start of each wave, a rewind when a death replays, and a chime or buzz for a kept or rejected rule. A SOUND button and the M key mute it, remembered in this browser.
   Why now: Matt, 2026-09-26: "we should also consider adding a sound effects to the game." Before carriers, so the saved learning run and the video have it.
   PRD ref: `prd.md > Sound`
@@ -234,4 +234,5 @@ Activity mode:
 - Slice 12: the fly-in takes 7.9 s from wave start to the last enemy in its slot, and the fight starts 1 s later. Building it turned up a scoring bug from slice 11: an enemy was marked dead before its points were counted, so every diving kill paid formation points. Fixed; a diving Cyclops now pays 400.
 - Review of slices 11 and 12 (four finders, a skeptic per dimension): three real defects fixed. A Cyclops at an end slot could loop 0.7 columns off the field; its loop now swings to one side, away from the edge. A revving Drone's arrival time ignored the formation's drift during the rev (off by up to 0.2 s), and every "reaching your row" time now counts to when the enemy can hit, matching the "Drone in 0.6 s" numbers. Describing the fight cost 7 to 13 ms per ask during the fly-in; one ask now shares its three predictions and skips the simulation when nothing can reach the ship, which brings it to 0.1 ms in wave 1 and 3 ms in wave 2. Two findings were rejected: the Bat's edge guard is deliberate, and a charging Cyclops with a shut eye is meant to show both.
 - Sound effects added as slice 13, before carriers (Matt, 2026-09-26: "we should also consider adding a sound effects to the game"; on where it goes: "Whatever you think"). Synthesized in code, so there are no audio files and no paid generation, and the video can render the same sounds. Carriers, waves, the Enemy Library and honest failures move to slices 14 to 17.
+- Slice 13: 17 voices, each checked non-silent through an OfflineAudioContext in the browser pane. Cues are read off the world each animation frame, so a hidden tab (which pauses frames) can miss short sounds; that's fine, since nobody hears a hidden tab. The dev build exposes `jevagaSound` in the console to render or check a voice.
 

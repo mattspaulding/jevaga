@@ -1,16 +1,20 @@
 "use client";
 
 import { useEffect, useRef, type RefObject } from "react";
+import { createCueTracker } from "@/lib/game/cues";
 import { makeRng } from "@/lib/game/rng";
+import { sound } from "@/lib/game/sound";
 import { render, VIEW_H, VIEW_W, type Star } from "@/lib/game/render";
 import type { World } from "@/lib/game/world";
 
 
 // Draws every animation frame from the live fight, so movement is smooth
-// without re-rendering React. The starfield scrolls and the hit is timed here.
+// without re-rendering React. The starfield scrolls, the hit is timed and the
+// sound cues are read off the fight here.
 export default function GameCanvas({
   worldRef,
   hitRef,
+  replayingRef,
   score,
   who,
   banner,
@@ -19,6 +23,7 @@ export default function GameCanvas({
 }: {
   worldRef: RefObject<World>;
   hitRef: RefObject<boolean>;
+  replayingRef: RefObject<boolean>; // set before a replay's world is swapped in, so its first frame cues a rewind
   score: number;
   who: "jev" | "you";
   banner: string | null;
@@ -41,6 +46,7 @@ export default function GameCanvas({
     let wasHit = false;
     let world = worldRef.current;
     const t0 = performance.now();
+    const cues = createCueTracker();
 
     const draw = (now: number) => {
       if (worldRef.current !== world) {
@@ -53,13 +59,14 @@ export default function GameCanvas({
         wasHit = true;
         boomStart = now;
       }
+      for (const cue of cues.update(world, replayingRef.current)) sound.play(cue);
       const ctx = ref.current?.getContext("2d");
       if (ctx) render(ctx, world, { who: whoRef.current, stars, starSeconds: (now - t0) / 1000, boomMs: wasHit ? now - boomStart : null });
       raf = requestAnimationFrame(draw);
     };
     raf = requestAnimationFrame(draw);
     return () => cancelAnimationFrame(raf);
-  }, [worldRef, hitRef]);
+  }, [worldRef, hitRef, replayingRef]);
   return (
     <div className="gameWrap">
       <canvas ref={ref} width={VIEW_W} height={VIEW_H} className="game" aria-label="Jevaga playfield" />
