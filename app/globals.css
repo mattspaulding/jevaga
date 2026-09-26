@@ -756,3 +756,78 @@ body {
   border-color: var(--gold);
   color: var(--gold);
 }
+
+/* ---------- /sounds: the sound panel's audition page (development only) ---------- */
+
+.lab {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 24px 16px 48px;
+}
+.labIntro {
+  color: var(--muted);
+  max-width: 70ch;
+}
+.labTable {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 16px 0;
+}
+.labTable th,
+.labTable td {
+  border-bottom: 2px solid var(--ground);
+  padding: 8px 6px;
+  text-align: left;
+  vertical-align: top;
+}
+.labTable th {
+  color: var(--gold);
+}
+.labName {
+  color: var(--ink);
+}
+.labMuted {
+  color: var(--muted);
+  font-size: 13px;
+}
+.labCell {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+}
+.labPlay {
+  font: 13px var(--font-pixel);
+  color: var(--ink);
+  background: var(--btn);
+  border: 2px solid var(--muted);
+  border-radius: 3px;
+  padding: 3px 7px;
+  cursor: pointer;
+}
+.labMontage {
+  display: block;
+  margin-top: 4px;
+}
+.labPick {
+  font-size: 13px;
+  color: var(--muted);
+  display: inline-flex;
+  gap: 3px;
+  align-items: center;
+}
+.labNote {
+  width: 100%;
+  min-width: 140px;
+  font: 13px system-ui, sans-serif;
+  background: var(--ground);
+  color: var(--ink);
+  border: 2px solid var(--muted);
+  border-radius: 3px;
+  padding: 4px;
+}
+.labSave {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+}
