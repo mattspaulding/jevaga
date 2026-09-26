@@ -16,7 +16,7 @@ import {
   type RunRow,
   type Status,
 } from "@/components/Panel";
-import { describeFight, describeMoves } from "@/lib/describe";
+import { describe } from "@/lib/describe";
 import { driveWithJev, startRun, type Run, type RunEnd } from "@/lib/game/loop";
 import { randomSeed } from "@/lib/game/rng";
 import { newWorld, resetRun, SUBSTEP, type Move, type World } from "@/lib/game/world";
@@ -235,7 +235,7 @@ export default function Game() {
       const probe = resetRun(base);
       for (let tries = 1; ; tries++) {
         try {
-          await getMove({ state: describeFight(probe), moves: describeMoves(probe), rules: bookRef.current.rules });
+          await getMove({ ...describe(probe), rules: bookRef.current.rules });
           if (stopped()) return;
           break;
         } catch (e) {

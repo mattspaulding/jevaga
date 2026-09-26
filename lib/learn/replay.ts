@@ -1,4 +1,4 @@
-import { describeFight, describeMoves } from "../describe";
+import { describe } from "../describe";
 import { act, movePath, stepN, SUBSTEP, threatOnPath, type HitBy, type Move, type RunEvent, type World } from "../game/world";
 import type { DecideInput, Decision } from "../system1/types";
 import type { Death } from "./recorder";
@@ -53,7 +53,7 @@ export async function replay(death: Death, rules: string[], decide: Decide): Pro
     if (!beat && until(death.hitStep)) return done("hit", { hitBy: w.hitBy ?? undefined });
     let decision: Decision;
     try {
-      decision = await decide({ state: describeFight(w), moves: describeMoves(w), rules });
+      decision = await decide({ ...describe(w), rules });
       asked++;
     } catch (e) {
       return done("untested", { error: e instanceof Error ? e.message : String(e) });

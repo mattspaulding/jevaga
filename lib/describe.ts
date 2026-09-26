@@ -5,6 +5,7 @@ import {
   COMMIT_ROW,
   CY_DROP,
   CY_GLOW,
+  DIVER_REACH,
   DRONE_FALL,
   DRONE_REV,
   DRONE_SLIDE,
@@ -41,13 +42,24 @@ export const ARRIVAL = /\b(?:Drone|Bat|Cyclops)(?: bullet| shot)? in (\d+(?:\.\d
 
 const s1 = (x: number) => `${x.toFixed(1)} s`;
 const at = (x: number) => `x ${x.toFixed(1)}`;
+// Rows left before a diver at `y` is close enough to hit the ship.
+const toHit = (y: number) => Math.max(0, SHIP_ROW - DIVER_REACH - y);
 const rowsUp = (y: number) => `${Math.max(0, SHIP_ROW - y).toFixed(0)} rows up`;
 
 // What reaches the ship first if it makes `move`, counting everything it
-// passes under on the way, not just where it ends up.
-function incoming(world: World, move: Move): string {
-  const th = threatOnPath(world, movePath(world, move));
-  return th ? `${th.by} in ${s1(th.at)}` : "nothing for 2.5+ s";
+// passes under on the way, not just where it ends up. Each answer runs a copy
+// of the fight forward, so one ask shares them through `memo` (fire and stay
+// take the same path).
+type Memo = Map<Move, string>;
+function incoming(world: World, move: Move, memo: Memo): string {
+  const key = move === "fire" ? "stay" : move;
+  let text = memo.get(key);
+  if (text === undefined) {
+    const th = threatOnPath(world, movePath(world, key));
+    text = th ? `${th.by} in ${s1(th.at)}` : "nothing for 2.5+ s";
+    memo.set(key, text);
+  }
+  return text;
 }
 
 function above(world: World, x: number): string {
@@ -79,22 +91,23 @@ function diveLine(world: World, e: Enemy): string | null {
   switch (d.phase) {
     case "rev": {
       const start = DRONE_REV - age;
-      const reach = start + Math.abs(d.x - d.col) / DRONE_SLIDE + (SHIP_ROW - d.y) / DRONE_FALL;
+      const slideFrom = e.slot.col + drift(d.since + DRONE_REV); // the formation keeps drifting while it revs
+      const reach = start + Math.abs(slideFrom - d.col) / DRONE_SLIDE + toHit(d.y) / DRONE_FALL;
       return `a Drone revving in the formation, locked on ${col}: in ${s1(start)} it moves over and falls straight down ${col}, reaching your row in ${s1(reach)}. Drones never turn or shoot`;
     }
     case "slide":
       if (e.kind === 2)
-        return `a Drone moving over to ${col}, then falling straight down it, reaching your row in ${s1(Math.abs(d.x - d.col) / DRONE_SLIDE + (SHIP_ROW - d.y) / DRONE_FALL)}`;
+        return `a Drone moving over to ${col}, then falling straight down it, reaching your row in ${s1(Math.abs(d.x - d.col) / DRONE_SLIDE + toHit(d.y) / DRONE_FALL)}`;
       return `a Cyclops at ${at(d.x)} heading to park over ${col}, ${rowsUp(HOVER_ROW)}; there it shoots twice at where you are then, and then drops straight down ${col}`;
     case "fall":
-      return `a Drone falling straight down ${col}, ${rowsUp(d.y)}, never turns, reaching your row in ${s1((SHIP_ROW - d.y) / DRONE_FALL)}`;
+      return `a Drone falling straight down ${col}, ${rowsUp(d.y)}, never turns, reaching your row in ${s1(toHit(d.y) / DRONE_FALL)}`;
     case "flap":
     case "zig": {
       const commit = d.phase === "zig" ? batCommitAge(d) - age : BAT_FLAP - age + batCommitAge(d);
       return `a Bat zigzagging down at ${at(d.x)}, ${rowsUp(d.y)}, firing straight down at rows 5 and 8; at row ${COMMIT_ROW} in ${s1(Math.max(0, commit))} it turns once toward wherever you are then`;
     }
     case "commit":
-      return `a Bat committed to ${col}, ${rowsUp(d.y)}, flying straight at it, reaching your row in ${s1((SHIP_ROW - d.y) / BAT_COMMIT)}`;
+      return `a Bat committed to ${col}, ${rowsUp(d.y)}, flying straight at it, reaching your row in ${s1(toHit(d.y) / BAT_COMMIT)}`;
     case "open":
     case "loop":
       return `a Cyclops looping out of the formation, heading to park over ${col}, ${rowsUp(HOVER_ROW)}; there it shoots twice at where you are then, and then drops straight down ${col}`;
@@ -103,7 +116,7 @@ function diveLine(world: World, e: Enemy): string | null {
       return `a Cyclops parked over ${col}, ${rowsUp(d.y)}, eye glowing: it shoots at where you are then in ${s1(Math.max(0, next))}${d.fired === 0 ? ", and again 0.8 s later" : ""}, then drops straight down ${col}`;
     }
     case "drop":
-      return `a Cyclops dropping straight down ${col}, ${rowsUp(d.y)}, reaching your row in ${s1((SHIP_ROW - d.y) / CY_DROP)}`;
+      return `a Cyclops dropping straight down ${col}, ${rowsUp(d.y)}, reaching your row in ${s1(toHit(d.y) / CY_DROP)}`;
     case "home":
     case "enter":
     case "settle":
@@ -136,7 +149,13 @@ function arrivingLine(world: World): string | null {
   return parts.length ? `Arriving: ${parts.join("; ")}. Nothing dives until the formation is in place.` : null;
 }
 
-export function describeFight(world: World): string {
+// Everything Jev is asked with, the fight and the four moves, from one set of predictions.
+export function describe(world: World): { state: string; moves: Record<Move, string> } {
+  const memo: Memo = new Map();
+  return { state: describeFight(world, memo), moves: describeMoves(world, memo) };
+}
+
+export function describeFight(world: World, memo: Memo = new Map()): string {
   const x = restX(world);
   const spots: [string, Move][] = [
     ["a little left", "left"],
@@ -145,7 +164,7 @@ export function describeFight(world: World): string {
   ];
   const lines = [
     shipLine(world),
-    `Coming at your row, counting the way there: ${spots.map(([name, m]) => `${name} (${at(landingX(world, m))}): ${incoming(world, m)}`).join("; ")}.`,
+    `Coming at your row, counting the way there: ${spots.map(([name, m]) => `${name} (${at(landingX(world, m))}): ${incoming(world, m, memo)}`).join("; ")}.`,
     `Above you: ${above(world, x)}.`,
   ];
   const arrival = arrivingLine(world);
@@ -170,23 +189,23 @@ export function describeFight(world: World): string {
 }
 
 // The four moves, each with the facts about where it leaves the ship a quarter-second later.
-export function describeMoves(world: World): Record<Move, string> {
+export function describeMoves(world: World, memo: Memo = new Map()): Record<Move, string> {
   const x = restX(world);
   const ready = gunReadyIn(world);
   const glide = (move: "left" | "right") => {
     const to = landingX(world, move);
     return Math.abs(to - x) < 0.05
-      ? `Can't glide ${move}: the edge. Same as staying. Here (${at(x)}): ${incoming(world, "stay")}.`
-      : `Glide ${move} to about ${at(to)}. On the way and there: ${incoming(world, move)}; ${above(world, to)}.`;
+      ? `Can't glide ${move}: the edge. Same as staying. Here (${at(x)}): ${incoming(world, "stay", memo)}.`
+      : `Glide ${move} to about ${at(to)}. On the way and there: ${incoming(world, move, memo)}; ${above(world, to)}.`;
   };
   return {
     left: glide("left"),
     right: glide("right"),
-    stay: `Stop at ${at(x)}. Here: ${incoming(world, "stay")}.`,
+    stay: `Stop at ${at(x)}. Here: ${incoming(world, "stay", memo)}.`,
     fire:
       ready > 0
-        ? `Stop and fire: gun reloading, ready in ${s1(ready)}; no shot. Here (${at(x)}): ${incoming(world, "fire")}.`
-        : `Stop at ${at(x)} and fire: ${above(world, x)}. Here: ${incoming(world, "fire")}.`,
+        ? `Stop and fire: gun reloading, ready in ${s1(ready)}; no shot. Here (${at(x)}): ${incoming(world, "fire", memo)}.`
+        : `Stop at ${at(x)} and fire: ${above(world, x)}. Here: ${incoming(world, "fire", memo)}.`,
   };
 }
 

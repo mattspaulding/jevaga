@@ -1,4 +1,4 @@
-import { describeFight, describeMoves } from "../describe";
+import { describe } from "../describe";
 import type { DecideInput, Decision } from "../system1/types";
 import { act, fire, steer, stepN, SUBSTEP, type Move, type World } from "./world";
 
@@ -107,7 +107,7 @@ export async function driveWithJev(
   while (!run.ended()) {
     await sleepUnless(lastSent + MIN_REQUEST_INTERVAL_MS - performance.now(), run.ended);
     if (run.ended()) break;
-    const input: DecideInput = { state: describeFight(run.world), moves: describeMoves(run.world), rules: hooks.rules() };
+    const input: DecideInput = { ...describe(run.world), rules: hooks.rules() };
     hooks.onAsk?.(input, run.world);
     const sent = performance.now();
     lastSent = sent;

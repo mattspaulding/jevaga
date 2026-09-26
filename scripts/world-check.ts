@@ -1,6 +1,6 @@
 // Checks the shooter's rules that the game, Jev's descriptions and the tests depend on.
 // Run: pnpm world-check
-import { describeFight, describeMoves } from "../lib/describe";
+import { describe, describeFight, describeMoves } from "../lib/describe";
 import { LETTERS, SPRITES } from "../lib/game/sprites";
 import { createRecorder, type Death } from "../lib/learn/recorder";
 import { playback, replay } from "../lib/learn/replay";
@@ -333,6 +333,57 @@ function immortal(w: World) {
   until(w, () => d.phase === "park");
   until(w, () => false, 4);
   check(`an aimed shot reaches where the ship was and hits a ship that stays (${w.hitBy?.by} at x ${w.hitBy?.x.toFixed(2)})`, w.hitBy?.by === "Cyclops shot" && near(w.hitBy.x, 7, 0.15));
+}
+
+// A Cyclops at the end of the formation loops without leaving the field (review, 2026-09-26).
+{
+  let worst = 0;
+  for (const col of [1, 7])
+    for (let t0 = 0; t0 < 11; t0 += 0.25) {
+      const w = quiet();
+      stepN(w, Math.round(t0 / 0.02));
+      w.ship.x = col === 1 ? 8 : 0; // it heads away from the edge it's looping at
+      const e = find(w, 0, col);
+      startDive(w, e);
+      until(w, () => {
+        if (e.diving?.phase === "loop") worst = Math.max(worst, -e.diving.x, e.diving.x - 8);
+        return e.diving?.phase === "slide";
+      }, 3);
+    }
+  check(`a Cyclops's opening loop stays on the field from the end slots (worst overshoot ${worst.toFixed(2)})`, worst <= 1e-9);
+}
+
+// A revving Drone's "reaching your row in" counts the formation's drift during the rev (review, 2026-09-26).
+{
+  let worst = 0;
+  for (let t0 = 0; t0 < 11; t0 += 0.5)
+    for (const shipX of [0, 4, 8]) {
+      const w = quiet();
+      stepN(w, Math.round(t0 / 0.02));
+      w.ship.x = shipX;
+      const e = find(w, 2, 2);
+      startDive(w, e);
+      const said = Number(describeFight(w).match(/a Drone revving .*?reaching your row in (\d+\.\d) s/)?.[1]);
+      const t = w.t;
+      until(w, () => (e.diving?.y ?? 0) >= SHIP_ROW - 0.6, 6);
+      worst = Math.max(worst, Math.abs(w.t - t - said));
+    }
+  check(`a revving Drone's arrival time is right to the tenth of a second (worst miss ${worst.toFixed(2)} s)`, worst <= 0.13);
+}
+
+// One ask describes the fight and the moves from one set of predictions, and says the same as describing them apart.
+{
+  const w = newWorld(6);
+  let same = 0;
+  let asks = 0;
+  for (let i = 0; i < 90 && w.alive; i++) {
+    const both = describe(w);
+    asks++;
+    if (both.state === describeFight(w) && JSON.stringify(both.moves) === JSON.stringify(describeMoves(w))) same++;
+    stepN(w, 14);
+    act(w, (["left", "fire", "right", "fire", "stay"] as const)[i % 5]);
+  }
+  check(`describe() matches describeFight + describeMoves on ${same}/${asks} asks`, same === asks && asks > 40);
 }
 
 // In formation: Bats drop straight bullets, a Cyclops fires an aimed shot after its eye glows, Drones never fire.

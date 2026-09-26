@@ -254,7 +254,8 @@ function rand(world: World): number {
 export const resetRun = (world: World) => newWorld(world.seed);
 
 const bulletHits = (b: { x: number; y: number }, x: number) => Math.abs(b.x - x) < SHIP_HALF && Math.abs(b.y - SHIP_ROW) < 0.5;
-const diverHits = (d: { x: number; y: number }, x: number) => Math.abs(d.x - x) < 0.6 && Math.abs(d.y - SHIP_ROW) < 0.6;
+export const DIVER_REACH = 0.6; // a diver this close to the ship, across and up, hits it
+const diverHits = (d: { x: number; y: number }, x: number) => Math.abs(d.x - x) < DIVER_REACH && Math.abs(d.y - SHIP_ROW) < DIVER_REACH;
 // Arriving: flying in or settling into its slot at the start of a wave.
 export const arriving = (e: Enemy) => e.alive && !!e.diving && (e.diving.phase === "enter" || e.diving.phase === "settle");
 // Attacking: a dive under way, as opposed to arriving or flying home.
@@ -334,7 +335,12 @@ function stepDive(world: World, e: Enemy, d: Dive, dt: number) {
       d.x = p.x;
       d.y = p.y;
       if (d.phase === "rev" && age >= DRONE_REV) next("slide");
-      if (d.phase === "open" && age >= CY_OPEN) next("loop");
+      if (d.phase === "open" && age >= CY_OPEN) {
+        next("loop");
+        // the loop swings 2 × CY_LOOP_R to one side: keep it on the field
+        const far = d.x0 + 2 * CY_LOOP_R * d.dir;
+        if (far < 0 || far > COLS - 1) d.dir = d.dir === 1 ? -1 : 1;
+      }
       if (d.phase === "flap" && age >= BAT_FLAP) {
         d.phase = "zig"; // keeps the start fixed at launch, so the drawn path is the flown one
         d.since = t;
@@ -362,8 +368,9 @@ function stepDive(world: World, e: Enemy, d: Dive, dt: number) {
       break;
     case "loop": {
       const a = (2 * Math.PI * Math.min(age, CY_LOOP)) / CY_LOOP;
-      d.x = d.x0 + d.dir * CY_LOOP_R * Math.sin(a);
-      d.y = d.y0 + CY_LOOP_R * (1 - Math.cos(a));
+      // one small circle beside where it started: down first, round, and back
+      d.x = d.x0 + d.dir * CY_LOOP_R * (1 - Math.cos(a));
+      d.y = d.y0 + CY_LOOP_R * Math.sin(a);
       if (age >= CY_LOOP) next("slide");
       break;
     }
@@ -577,6 +584,19 @@ export const gunReadyIn = (world: World) => Math.max(0, world.ship.reloadUntil -
 
 // ---------- prediction (for describing the fight and for tests) ----------
 
+// True when nothing on screen or already committed can reach the ship: no
+// bullets, no charged eyes, no dives under way, and nobody flying in who still
+// fires. New launches don't count (see threatOnPath), so the simulation can be skipped.
+function nothingCanHit(world: World): boolean {
+  if (world.bullets.length) return false;
+  return world.enemies.every((e) => {
+    if (!e.alive) return true;
+    if (e.charge !== null) return false;
+    const d = e.diving;
+    return !d || d.phase === "home" || d.phase === "settle" || (d.phase === "enter" && d.fired !== 0);
+  });
+}
+
 // When would a ship parked at `x` first be hit, from now? Follows what's
 // already on screen or already committed (not dives or volleys that haven't
 // launched yet).
@@ -589,7 +609,7 @@ export function threatAt(world: World, x: number, horizon = 2.5) {
 // enemy is predicted exactly: a Bat commits to where the path has the ship at
 // that moment, and a Cyclops aims at it.
 export function threatOnPath(world: World, path: (s: number) => number, horizon = 2.5): { at: number; by: Threat } | null {
-  if (!world.alive) return null;
+  if (!world.alive || nothingCanHit(world)) return null;
   const w = structuredClone(world);
   for (let i = 1; i * SUBSTEP <= horizon + 1e-9; i++) if (step(w, SUBSTEP, { shipX: path(i * SUBSTEP) })) return { at: i * SUBSTEP, by: w.hitBy!.by };
   return null;
