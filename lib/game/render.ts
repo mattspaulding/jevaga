@@ -17,7 +17,8 @@ import {
   type Enemy,
   type World,
 } from "./world";
-import { BODY, drawSprite, type SpriteName } from "./sprites";
+import { bulletsAt, dancing, debrisAt, enemyAt, flashAt, shotsAt, type Aftermath } from "./aftermath";
+import { BODY, drawSprite, PALETTE_GOLD, type SpriteName } from "./sprites";
 
 export const TILE = 16;
 export const VIEW_W = COLS * TILE;
@@ -44,6 +45,7 @@ export type View = {
   stars: Star[];
   starSeconds: number; // how far the starfield has scrolled
   boomMs: number | null; // time since the ship was hit, or null
+  aftermath?: { a: Aftermath; s: number } | null; // after a hit: the death sequence, s seconds in
 };
 
 // Every object is drawn centred on its position: (x × 16 + 8, y × 16 + 8).
@@ -183,12 +185,26 @@ export function render(ctx: CanvasRenderingContext2D, world: World, view: View) 
     }
   }
 
-  const t = world.t;
-  entryLines(ctx, world);
-  for (const e of world.enemies) if (e.alive && e.diving) pathLine(ctx, e, e.diving, t);
+  const after = view.aftermath ?? null;
+  const t = after ? after.a.tHit + after.s : world.t;
+  if (!after) {
+    entryLines(ctx, world);
+    for (const e of world.enemies) if (e.alive && e.diving) pathLine(ctx, e, e.diving, t);
+  }
 
   const flap = Math.floor(t / FLAP_S) % 2 === 0 ? "a" : "b";
-  for (const e of world.enemies) {
+  if (after) {
+    // After the hit: everyone flies home, then the formation dances (lib/game/aftermath.ts).
+    const party = dancing(after.a, after.s);
+    const beat = party ? (Math.floor(t / 0.12) % 2 === 0 ? "a" : "b") : flap; // flapping double time
+    for (const e of after.a.enemies) {
+      const p = enemyAt(after.a, e, after.s);
+      if (p.y < -1) continue;
+      drawSprite(ctx, `enemy${e.kind}-${beat}` as SpriteName, px(p.x), px(p.y), BODY.enemy[e.kind]);
+      if (e.kind === 0 && (e.hp === 1 || p.wink)) eyeShut(ctx, px(p.x), px(p.y), false);
+    }
+  }
+  for (const e of after ? [] : world.enemies) {
     if (!e.alive) continue;
     const p = enemyPos(e, t);
     if (p.y < -1) continue; // still waiting to fly in
@@ -217,8 +233,8 @@ export function render(ctx: CanvasRenderingContext2D, world: World, view: View) 
     if (frame < 3) drawSprite(ctx, `pop-${frame + 1}` as SpriteName, px(pop.x), px(pop.y), BODY.enemy[pop.kind]);
   }
 
-  for (const b of world.bullets) drawSprite(ctx, b.from === 0 ? "bullet-aim" : "bullet", px(b.x), px(b.y));
-  for (const s of world.shots) drawSprite(ctx, "shot", px(s.x), px(s.y));
+  for (const b of after ? bulletsAt(after.a, after.s) : world.bullets) drawSprite(ctx, b.from === 0 ? "bullet-aim" : "bullet", px(b.x), px(b.y));
+  for (const s of after ? shotsAt(after.a, after.s) : world.shots) drawSprite(ctx, "shot", px(s.x), px(s.y));
 
   const ship = BODY[view.who];
   const sx = px(world.ship.x);
@@ -229,5 +245,20 @@ export function render(ctx: CanvasRenderingContext2D, world: World, view: View) 
   } else {
     const frame = Math.floor(view.boomMs / BOOM_FRAME_MS);
     if (frame < 4) drawSprite(ctx, `boom-${frame + 1}` as SpriteName, sx, sy, ship);
+  }
+  if (after) {
+    // The ship's pieces, then a white flash over everything.
+    for (const p of debrisAt(after.a, after.s)) {
+      ctx.globalAlpha = p.alpha;
+      ctx.fillStyle = p.d.color === "body" ? ship : p.d.color === "gold" ? PALETTE_GOLD : "#ffffff";
+      ctx.fillRect(Math.round(px(p.x) - p.d.size / 2), Math.round(px(p.y) - p.d.size / 2), p.d.size, p.d.size);
+    }
+    const flash = flashAt(after.s);
+    if (flash > 0) {
+      ctx.globalAlpha = flash;
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, VIEW_W, VIEW_H);
+    }
+    ctx.globalAlpha = 1;
   }
 }

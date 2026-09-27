@@ -1,6 +1,7 @@
 // Checks the shooter's rules that the game, Jev's descriptions and the tests depend on.
 // Run: pnpm world-check
 import { describe, describeFight, describeMoves } from "../lib/describe";
+import { bulletsAt, debrisAt, enemyAt, flashAt, shakeAt, startAftermath } from "../lib/game/aftermath";
 import { createCueTracker, type Cue } from "../lib/game/cues";
 import { LETTERS, SPRITES } from "../lib/game/sprites";
 import { createRecorder, type Death } from "../lib/learn/recorder";
@@ -538,6 +539,34 @@ function immortal(w: World) {
   check(`a rev per Drone dive (${n("rev")}/${launched.rev}), a flutter per Bat (${n("flutter")}/${launched.flutter}), a loop per Cyclops (${n("loop")}/${launched.loop})`, n("rev") === launched.rev && n("flutter") === launched.flutter && n("loop") === launched.loop && launched.rev > 0);
   const copy = structuredClone(w);
   check("swapping in a replay's world gives one rewind cue and nothing for what's already on screen", JSON.stringify(cues.update(copy, true)) === JSON.stringify([{ name: "rewind" }]) && cues.update(copy, true).length === 0);
+}
+
+// After a hit: the death sequence starts from a copy of the world and never changes it.
+{
+  const w = newWorld(5);
+  while (w.alive) {
+    act(w, (["fire", "stay", "left", "fire", "right"] as const)[w.steps % 5]);
+    stepN(w, 14);
+  }
+  const before = JSON.stringify(w);
+  const a = startAftermath(w);
+  const b = startAftermath(w);
+  check("the death sequence leaves the dead world untouched and comes out the same every time", JSON.stringify(w) === before && JSON.stringify(a) === JSON.stringify(b));
+  const out = a.enemies.filter((e) => e.flight > 0).length;
+  const home = a.enemies.every((e) => {
+    const p = enemyAt(a, e, a.danceAt);
+    return near(p.y, e.row, 1e-9) && near(p.x, e.col + drift(a.tHit + a.danceAt), 1e-9);
+  });
+  check(`every enemy is back in its slot before the dance (${out} flew home, dance at ${a.danceAt.toFixed(2)} s)`, home && a.danceAt < 2.6);
+  let wander = 0;
+  for (let s = a.danceAt; s < a.danceAt + 20; s += 0.05)
+    for (const e of a.enemies) {
+      const p = enemyAt(a, e, s);
+      wander = Math.max(wander, Math.abs(p.x - (e.col + drift(a.tHit + s))), Math.abs(p.y - e.row));
+    }
+  check(`the dance stays within half a cell of each slot (at most ${wander.toFixed(2)})`, wander <= 0.5);
+  check("the flash, the shake and the pieces are over within 1.6 s", flashAt(0.2) === 0 && shakeAt(0.8).x === 0 && shakeAt(0.8).y === 0 && debrisAt(a, 1.6).length === 0 && debrisAt(a, 0.1).length > 10);
+  check("bullets in the air keep falling off the screen", bulletsAt(a, 3).length === 0);
 }
 
 // The sprite grids copied from the design canvas are well formed.

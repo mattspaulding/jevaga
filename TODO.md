@@ -17,4 +17,4 @@ Planning is done and approved (`devpost/scope.md`, `prd.md`, `spec.md`). Deadlin
 - [ ] Join the Nebius Builders Program (dev.nebius.com/builders) for another $25 of Token Factory credit.
 
 ## Game polish
-- [ ] **Death just freezes.** The ship's explosion plays (`components/GameCanvas.tsx`, `BOOM_MS` in `lib/game/render.ts`), then the screen sits still through the coach's studying/replay pause. Matt (2026-09-26): give the aliens something to do instead of freezing there, an explosion, then the aliens react, a little dance, some kind of celebration, or just flying off.
+- [x] **Death just freezes.** Done in slice 14. The ship's explosion plays (`components/GameCanvas.tsx`, `BOOM_MS` in `lib/game/render.ts`), then the screen sits still through the coach's studying/replay pause. Matt (2026-09-26): give the aliens something to do instead of freezing there, an explosion, then the aliens react, a little dance, some kind of celebration, or just flying off.

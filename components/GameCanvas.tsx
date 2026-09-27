@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, type RefObject } from "react";
+import { shakeAt, startAftermath, type Aftermath } from "@/lib/game/aftermath";
 import { createCueTracker } from "@/lib/game/cues";
 import { makeRng } from "@/lib/game/rng";
 import { sound } from "@/lib/game/sound";
@@ -44,6 +45,7 @@ export default function GameCanvas({
     let raf = 0;
     let boomStart = -Infinity;
     let wasHit = false;
+    let after: Aftermath | null = null; // the death sequence, from the world at the hit
     let world = worldRef.current;
     const t0 = performance.now();
     const cues = createCueTracker();
@@ -54,14 +56,24 @@ export default function GameCanvas({
         world = worldRef.current;
         boomStart = -Infinity;
         wasHit = false;
+        after = null;
       }
       if (hitRef.current && !wasHit) {
         wasHit = true;
         boomStart = now;
+        if (!world.alive) after = startAftermath(world);
+      }
+      const s = (now - boomStart) / 1000;
+      const canvas = ref.current;
+      if (canvas) {
+        // the playfield shakes for a moment when the ship blows up
+        const k = canvas.clientWidth / VIEW_W;
+        const shake = after ? shakeAt(s) : { x: 0, y: 0 };
+        canvas.style.transform = shake.x || shake.y ? `translate(${shake.x * k}px, ${shake.y * k}px)` : "";
       }
       for (const cue of cues.update(world, replayingRef.current)) sound.play(cue);
       const ctx = ref.current?.getContext("2d");
-      if (ctx) render(ctx, world, { who: whoRef.current, stars, starSeconds: (now - t0) / 1000, boomMs: wasHit ? now - boomStart : null });
+      if (ctx) render(ctx, world, { who: whoRef.current, stars, starSeconds: (now - t0) / 1000, boomMs: wasHit ? now - boomStart : null, aftermath: after ? { a: after, s } : null });
       raf = requestAnimationFrame(draw);
     };
     raf = requestAnimationFrame(draw);

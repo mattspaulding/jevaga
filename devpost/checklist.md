@@ -139,7 +139,7 @@ Build mode: fast (chosen 2026-09-25)
   Learner check: Play a wave with sound on. Do the sounds help you read the fight, and is anything annoying enough to change?
   Commit: `Add sound effects`
 
-- [ ] **14. A death looks like one**
+- [x] **14. A death looks like one**
   Becomes usable: when the ship is hit the fight no longer just freezes. The ship blows apart (a bigger explosion with debris and a flash), then the enemies react: divers peel off and fly home, and the formation does a short victory dance before the run-over banner.
   Why now: Matt, 2026-09-26: "when the player dies, the screen is just kind of freezes in place there. There should be some sort of like explosion and then the aliens would do something. Maybe like a little dance or some sort of celebration maybe or or just fly off." Every death is also what the replay and the video show.
   PRD ref: `prd.md > The fight`
@@ -248,4 +248,5 @@ Activity mode:
 - Matt on the slice 13 sounds, 2026-09-26: "The sounds aren't very good." Asked for a retune with more effort and a review panel. Since no agent can hear, every voice is now a pure function returning samples (`lib/game/voices/`), measured and drawn as spectrograms by `scripts/sound-lab.ts`, so a panel can design and judge sets and Matt picks by ear. The first sounds are kept as the `v1` baseline.
 - A death sequence was added to the list as slice 14 (Matt, 2026-09-26: the screen "freezes in place" when the ship dies; the aliens should "do a little dance... or just fly off"). Carriers, waves, the Enemy Library and honest failures move to slices 15 to 18.
 - The sound panel (2 researchers, 3 designers, 3 judges, then revisions) built three candidate sets: arcade (Galaga's wavetable and noise hardware), sfxr (classic sfxr presets) and juicy (modern layered retro). The judges split: juicy best for character (11 of 17 sounds), sfxr most often for the mix, arcade for craft. Matt listened on /sounds: "I like the juicy for all of the sounds." The game now plays juicy, rendering each take into an AudioBuffer ahead of time and rotating four variants so repeats don't play the same take twice running. The other sets stay in `lib/game/voices/` for the audition page.
+- Slice 14: the death sequence lives in `lib/game/aftermath.ts`, worked out from the seconds since the hit and a copy of the world at the hit, so the engine, recorded deaths and replays are untouched (checked). A white flash, a short shake, 24 pieces of the ship falling away, every enemy that was out flying home with a sideways swing, then a hop wave across the formation with Cyclopes winking, until the next run. Seen live in the browser pane; a replay that ends in a hit uses the same path, but the one Jev replay watched survived, so that case wasn't seen on screen.
 

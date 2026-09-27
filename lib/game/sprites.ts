@@ -393,6 +393,8 @@ const PALETTE: Record<string, string> = {
   e: "#3a3a58",
 };
 
+export const PALETTE_GOLD = PALETTE.F; // the ship's debris, with its body color and white
+
 // Every letter a grid may use (for the checks in scripts/world-check.ts).
 export const LETTERS = new Set([".", "C", "S", "h", ...Object.keys(PALETTE)]);
 
