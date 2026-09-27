@@ -150,8 +150,14 @@ export async function afterDeath(death: Death, before: Book, deps: JudgeDeps): P
 
     if (book.controls.length) {
       deps.onStep?.({ kind: "controls", attempt });
-      firedBefore ??= await firedWith(book.rules);
-      a.controls = { tested: book.controls.length, fired: await firedWith(candidate), before: firedBefore };
+      try {
+        firedBefore ??= await firedWith(book.rules);
+        a.controls = { tested: book.controls.length, fired: await firedWith(candidate), before: firedBefore };
+      } catch (e) {
+        // Jev stopped answering: like a replay that loses Jev partway, the rule counts as not tested.
+        if (e instanceof Cancelled) throw e;
+        return { kind: "untested", death, attempts, book: before, error: e instanceof Error ? e.message : String(e) };
+      }
       if (a.controls.fired < a.controls.before) {
         a.why = `your rule "${coaching.rule}" made the pilot shoot less: with nothing arriving and an enemy above, it fired in ${a.controls.fired} of ${a.controls.tested} calm moments, down from ${a.controls.before} without it.`;
         retry = a.why;

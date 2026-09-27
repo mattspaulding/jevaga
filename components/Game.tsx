@@ -51,7 +51,7 @@ const usageRef = { current: emptyUsage() };
 // checks) all call it, so counting here counts all of them once each.
 const getMove = (input: DecideInput, signal?: AbortSignal) =>
   post<Decision>("/api/move", input, signal).then((d) => {
-    addJevAnswer(usageRef.current, d.usage);
+    if (d.source === "jev") addJevAnswer(usageRef.current, d.usage); // the offline stand-in isn't Jev and costs nothing
     return d;
   });
 // Replays share one queue: at most 4 questions a second, retried twice on failure.
@@ -74,7 +74,14 @@ function initialSeed(): number {
 export default function Game() {
   const [seed] = useState<number>(initialSeed);
   const [base] = useState<World>(() => newWorld(seed));
-  const worldRef = useRef<World>(base);
+  // Before the first Start the playfield shows the formation standing still in
+  // its slots (every run itself begins with the fly-in).
+  const [still] = useState<World>(() => {
+    const w = resetRun(base);
+    for (const e of w.enemies) e.diving = null;
+    return w;
+  });
+  const worldRef = useRef<World>(still);
   const hitRef = useRef(false);
   const runRef = useRef<Run | null>(null);
   const [mode, setMode] = useState<Mode>("jev");
@@ -89,6 +96,7 @@ export default function Game() {
   const [judgeStep, setJudgeStep] = useState<JudgeStep | null>(null);
   const [verdict, setVerdict] = useState<Verdict | null>(null);
   const [judgedRun, setJudgedRun] = useState<number | null>(null);
+  const [judgeError, setJudgeError] = useState<string | null>(null); // judging a death failed in a way no verdict covers
   const [freshRule, setFreshRule] = useState<number | null>(null);
   const [runs, setRuns] = useState<RunRow[]>([]);
   const [banner, setBanner] = useState<string | null>(null); // "HIT · RUN 4 OVER", shown until the next run starts
@@ -323,6 +331,7 @@ export default function Game() {
         if (death) {
           setJudgedRun(n);
           setVerdict(null);
+          setJudgeError(null);
           try {
             const v = await afterDeath(death, bookRef.current, {
               decide: replayMove,
@@ -358,7 +367,7 @@ export default function Game() {
           } catch (e) {
             if (e instanceof Cancelled || stopped()) return;
             setJudgeStep(null);
-            setError(e instanceof Error ? e.message : String(e));
+            setJudgeError(e instanceof Error ? e.message : String(e)); // shown in the COACH window; the rulebook stays as it was
           }
         }
         await sleep(PAUSE_BETWEEN_RUNS_MS);
@@ -395,7 +404,7 @@ export default function Game() {
 
   return (
     <main className="layout">
-      <GameCanvas worldRef={worldRef} hitRef={hitRef} replayingRef={replayingRef} score={score} who={mode} banner={banner} bannerTone={bannerTone} replaying={replaying} />
+      <GameCanvas worldRef={worldRef} hitRef={hitRef} replayingRef={replayingRef} score={score} who={mode} simulated={mode === "jev" && decision?.source === "simulated"} banner={banner} bannerTone={bannerTone} replaying={replaying} />
       <aside className="panel">
         <div className="titleRow">
           <h1 className="title">JEVAGA</h1>
@@ -406,7 +415,7 @@ export default function Game() {
         {mode === "jev" ? (
           <>
             <DecisionBox decision={decision} status={status} />
-            <CoachBox step={judgeStep} verdict={verdict} run={judgedRun} />
+            <CoachBox step={judgeStep} verdict={verdict} run={judgedRun} error={judgeError} />
             <RulebookBox book={book} fresh={freshRule} />
           </>
         ) : (

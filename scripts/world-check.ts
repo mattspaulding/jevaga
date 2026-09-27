@@ -7,7 +7,9 @@ import { createCueTracker, type Cue } from "../lib/game/cues";
 import { LIBRARY } from "../lib/library";
 import { LETTERS, SPRITES } from "../lib/game/sprites";
 import { createRecorder, type Death } from "../lib/learn/recorder";
-import { playback, replay } from "../lib/learn/replay";
+import { afterDeath, emptyBook, type Book } from "../lib/learn/judge";
+import { playback, replay, type Decide } from "../lib/learn/replay";
+import type { Coaching } from "../lib/system2/coach";
 import { fake } from "../lib/system1/fake";
 import {
   act,
@@ -1073,7 +1075,68 @@ async function replayChecks() {
   }
 }
 
-replayChecks().then(() => {
+// Failing honestly: whatever part of judging a death loses Jev or Nemotron, no
+// rule is kept and the rulebook is exactly what it was.
+async function failureChecks() {
+  // A death: a ship that sits still until something hits it.
+  const w = newWorld(5);
+  const rec = createRecorder();
+  for (let i = 0; i < 600 && w.alive; i++) {
+    rec.onAsk({ state: "s", moves: describeMoves(w), rules: [] }, w);
+    rec.onDecision({ move: "stay", probabilities: { left: 0, right: 0, stay: 1, fire: 0 }, confidence: 1, source: "simulated" });
+    stepN(w, 14);
+  }
+  const death = rec.toDeath(1, w)!;
+  const answer = (move: "left" | "right" | "stay" | "fire") => ({ move, probabilities: { left: 0, right: 0, stay: 0, fire: 0, [move]: 1 }, confidence: 1, source: "simulated" as const });
+  const sitStill: Decide = async () => answer("stay");
+  const down: Decide = async () => {
+    throw new Error("Jev returned 401");
+  };
+  // Rules make this pilot dodge; without them it sits still, so the death happens again.
+  const learner: Decide = async (input) => (input.rules.length ? fake.decide({ ...input, rules: [...input.rules, "a", "b", "c"] }) : answer("stay"));
+  const rule: Coaching = { happened: "sat still under a bullet", change: { kind: "add" }, rule: "Move when something arrives within 1 s." };
+  const coach = async () => rule;
+  const before: Book = { ...emptyBook(), rules: ["An earlier rule."], controls: [{ state: "CALM", moves: death.asked[0].moves }] };
+  const same = (b: Book) => JSON.stringify(b.rules) === JSON.stringify(before.rules);
+
+  const v1 = await afterDeath(death, before, { decide: down, coach });
+  check(`Jev down while checking the death happens again: not tested, rulebook unchanged (${v1.kind})`, v1.kind === "untested" && same(v1.book) && !!v1.error);
+
+  let asks = 0;
+  const failsAfterReproduce: Decide = async (input) => {
+    asks++;
+    if (input.rules.length > 1) throw new Error("Jev timed out"); // the replay with the new rule
+    return sitStill(input);
+  };
+  const v2 = await afterDeath(death, before, { decide: failsAfterReproduce, coach });
+  check(`Jev down partway through the rule's replay: not tested, rulebook unchanged (${v2.kind}, ${asks} questions)`, v2.kind === "untested" && same(v2.book));
+
+  const failsOnControls: Decide = async (input) => {
+    if (input.state === "CALM") throw new Error("Jev returned 502");
+    return learner(input);
+  };
+  const v3 = await afterDeath(death, before, { decide: failsOnControls, coach });
+  check(`Jev down during the calm-moment check: not tested, rulebook unchanged (${v3.kind})`, v3.kind === "untested" && same(v3.book));
+
+  let coachCalls = 0;
+  const nemotronDown = async (): Promise<Coaching> => {
+    coachCalls++;
+    throw new Error("Token Factory returned 401");
+  };
+  const v4 = await afterDeath(death, before, { decide: sitStill, coach: nemotronDown });
+  check(`Nemotron down: no rule after ${coachCalls} tries, rulebook unchanged (${v4.kind})`, v4.kind === "coach-failed" && coachCalls === 3 && same(v4.book));
+
+  const v5 = await afterDeath(death, before, { decide: learner, coach });
+  check(`with everything up, the same death gets its rule kept (${v5.kind})`, v5.kind === "kept" && v5.book.rules.length === 2);
+
+  // Fake Jev: labeled SIMULATED, and each rule makes it dodge earlier.
+  const moves = { left: "Glide left to about x 2.8. On the way and there: nothing for 2.5+ s; no enemy above.", right: "Glide right to about x 5.3. On the way and there: nothing for 2.5+ s; no enemy above.", stay: "Stop at x 4.0. Here: Bat bullet in 0.9 s.", fire: "Stop at x 4.0 and fire: no enemy above. Here: Bat bullet in 0.9 s." };
+  const calm = await fake.decide({ state: "", moves, rules: [] });
+  const careful = await fake.decide({ state: "", moves, rules: ["one", "two"] });
+  check(`fake Jev is labeled simulated, and with two rules it dodges a bullet 0.9 s away that it ignores with none (${calm.move}, then ${careful.move})`, calm.source === "simulated" && calm.move === "stay" && careful.move !== "stay" && careful.move !== "fire");
+}
+
+replayChecks().then(failureChecks).then(() => {
   console.log(failures ? `\n${failures} check(s) failed` : "\nAll checks passed");
   process.exit(failures ? 1 : 0);
 });

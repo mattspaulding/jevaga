@@ -207,7 +207,8 @@ Retired: `app/api/plan`, `lib/system2/planner.ts`, `scripts/plan-test.ts`, `driv
 Unchanged: Jev at `POST https://ai-gateway.vercel.sh/typesafe/v1/systemone` (paid tier, ~250 ms median, ~4/s tested clean), Nemotron at `POST https://api.tokenfactory.nebius.com/v1/chat/completions` (`nvidia/Nemotron-3_5-Lightning`, `chat_template_kwargs.enable_thinking: false`). Cost: Jev ~$0.00002 per decision. A 60-second run is ~240 Jev calls; the learning steps after a death add up to ~100 more and one or two coach calls. Twenty runs of learning cost a few cents.
 
 ## Important Failure Modes
-- **Jev unavailable** → the fight doesn't start, or pauses mid-run with the chip (carried over). During a replay → `untested`; the rule isn't kept and the COACH window says it couldn't be tested.
+- **Jev unavailable** → the fight doesn't start, or pauses mid-run with the chip (carried over). While judging a death → `untested`: if it drops out replaying the death itself, Nemotron isn't asked; if it drops out while a rule is on trial (its replay, the earlier deaths, or the calm-moment check), the rule isn't kept. The COACH window says which. Any other judging error is shown in the COACH window too, and the rulebook stays as it was.
+- **Offline** → `SYSTEM1=fake`: a stand-in pilot reads the same descriptions and gets more careful with each rule; its moves are labeled SIMULATED in the JEV window and on the playfield, and don't count as Jev's answers in USAGE.
 - **Nemotron unavailable or slow** → no rule for that death; the next run starts with the rulebook unchanged and the COACH window says so.
 - **A replay doesn't match the live run** → only if Jev answers a repeated question differently (the cache was emptied, for example by a server restart). The reproduce step catches it and marks the death `luck`.
 - **Rules pile up or contradict** → at most 8; the coach must replace to add more, and every change has to keep the recent fixed deaths fixed.

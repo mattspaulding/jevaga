@@ -195,7 +195,7 @@ export function Controls({
 }
 
 // What the coach is doing between runs, then its verdict on the last death.
-export function CoachBox({ step, verdict, run }: { step: JudgeStep | null; verdict: Verdict | null; run: number | null }) {
+export function CoachBox({ step, verdict, run, error }: { step: JudgeStep | null; verdict: Verdict | null; run: number | null; error?: string | null }) {
   let tag: { text: string; tone: "gold" | "red" | "lilac" } | null = null;
   const lines: { text: string; className: string }[] = [];
   const who = run ? `run ${run}'s death` : "the death";
@@ -250,12 +250,23 @@ export function CoachBox({ step, verdict, run }: { step: JudgeStep | null; verdi
             : "Jev stopped shooting with it.";
       lines.push({ text: `${reason} ${tried.length > 1 ? "Both rules failed" : "The rule failed"}, so the rulebook is unchanged.`.trim(), className: "coachMeta" });
     } else if (verdict.kind === "untested") {
-      tag = { text: "NO RULE", tone: "lilac" };
-      lines.push({ text: "Jev didn't answer during the replay, so no rule could be tested. Rulebook unchanged.", className: "coachMeta" });
+      tag = { text: "NOT TESTED", tone: "lilac" };
+      // Jev can drop out before Nemotron is asked (replaying the death itself) or while a rule is on trial.
+      const proposed = verdict.attempts.some((a) => a.coaching?.rule);
+      const why = verdict.error ? ` (${verdict.error})` : "";
+      lines.push({
+        text: proposed
+          ? `Jev stopped answering while the rule was being tested${why}, so the rule couldn't be tested and isn't kept. Rulebook unchanged.`
+          : `Jev stopped answering while the death was being replayed${why}, so Nemotron wasn't asked for a rule. Rulebook unchanged.`,
+        className: "coachMeta",
+      });
     } else {
       tag = { text: "NO RULE", tone: "lilac" };
       lines.push({ text: `Nemotron didn't answer (${last?.error ?? "no reply"}). Rulebook unchanged.`, className: "coachMeta" });
     }
+  } else if (error) {
+    tag = { text: "NO RULE", tone: "lilac" };
+    lines.push({ text: `Something went wrong while judging that death (${error}). Rulebook unchanged.`, className: "coachMeta" });
   } else {
     lines.push({ text: "Watching. After each death, Nemotron writes Jev one rule, and a replay of the death decides if it stays.", className: "coachHappened" });
   }
