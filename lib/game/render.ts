@@ -11,10 +11,14 @@ import {
   ENTRY_SPEED,
   entryAt,
   HOVER_ROW,
+  PICKUP_BLINK,
+  PICKUP_STAYS,
   ROWS,
   SHIP_ROW,
+  wingmen,
   type Dive,
   type Enemy,
+  type Weapon,
   type World,
 } from "./world";
 import { bulletsAt, dancing, debrisAt, enemyAt, flashAt, shotsAt, type Aftermath } from "./aftermath";
@@ -81,7 +85,11 @@ function pathLine(ctx: CanvasRenderingContext2D, e: Enemy, d: Dive, t: number) {
   const column = (from: number, alpha: number) => dotted(ctx, [{ x: d.col, y: from }, { x: d.col, y: SHIP_ROW }], color, alpha, 2);
   if (d.phase === "home" || d.phase === "enter" || d.phase === "settle") return;
   if (e.kind === 2) {
-    column(d.phase === "fall" ? d.y + 0.6 : d.y, 0.7); // Drone: the column it will fall down
+    // Drone: the column it will fall down, and a carrier's mini-drones' columns either side
+    const from = d.phase === "fall" ? d.y + 0.6 : d.y;
+    column(from, 0.7);
+    if (e.carries === "wingmen" && d.phase !== "fall")
+      for (const x of [d.col - 1, d.col + 1]) if (x >= 0 && x <= COLS - 1) dotted(ctx, [{ x, y: from }, { x, y: SHIP_ROW }], color, 0.45, 2);
     return;
   }
   if (e.kind === 0) {
@@ -139,6 +147,82 @@ function entryLines(ctx: CanvasRenderingContext2D, world: World) {
     const along = Math.max(0, (world.t - d.since) * ENTRY_SPEED);
     const pts = ENTRY_PATHS[path].filter((p) => p.at > along);
     dotted(ctx, [entryAt(path, along), ...pts], BODY.enemy[e.kind], 0.55);
+  }
+}
+
+// Weapon icons, drawn in code (5 × 5 pixels): an eye, a fan of three, a pair of wings.
+const ICONS: Record<Weapon, string[]> = {
+  beam: [".OOO.", "OWKWO", "OKKKO", "OWKWO", ".OOO."],
+  fan: ["R.R.R", ".RRR.", "..R..", "..R..", "..R.."],
+  wingmen: ["M...M", "MM.MM", ".MMM.", "..M..", "....."],
+};
+const ICON_COLORS: Record<string, string> = { O: "#ffb347", W: "#f2f0e6", K: "#1b1b28", R: "#e8423a", M: "#b8c0e0" };
+function icon(ctx: CanvasRenderingContext2D, weapon: Weapon, cx: number, cy: number, scale = 1) {
+  const rows = ICONS[weapon];
+  const x0 = Math.round(cx - (5 * scale) / 2);
+  const y0 = Math.round(cy - (5 * scale) / 2);
+  rows.forEach((row, y) => {
+    for (let x = 0; x < row.length; x++) {
+      const c = ICON_COLORS[row[x]];
+      if (!c) continue;
+      ctx.fillStyle = c;
+      ctx.fillRect(x0 + x * scale, y0 + y * scale, scale, scale);
+    }
+  });
+}
+
+// A mini-drone (a carrier Drone's, or one of your Wingmen): a small chevron.
+function mini(ctx: CanvasRenderingContext2D, cx: number, cy: number, color: string, up: boolean) {
+  const rows = ["X...X", "XX.XX", ".XXX.", "..X.."];
+  const x0 = Math.round(cx - 2.5);
+  const y0 = Math.round(cy - 2);
+  (up ? [...rows].reverse() : rows).forEach((row, y) => {
+    for (let x = 0; x < 5; x++)
+      if (row[x] === "X") {
+        ctx.fillStyle = color;
+        ctx.fillRect(x0 + x, y0 + y, 1, 1);
+      }
+  });
+}
+
+// Eye Beams: a carrier Cyclops's thin warning line, then the beam filling the
+// column; your own is a flash up your column.
+function beams(ctx: CanvasRenderingContext2D, world: World, t: number, shipColor: string) {
+  for (const b of world.beams) {
+    const cx = Math.round(px(b.x));
+    if (b.from === "ship") {
+      const fade = Math.max(0, 1 - (t - b.start) / (b.end - b.start));
+      ctx.globalAlpha = fade;
+      ctx.fillStyle = shipColor;
+      ctx.fillRect(cx - 2, 0, 5, Math.round(px(SHIP_ROW) - 6));
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(cx - 1, 0, 2, Math.round(px(SHIP_ROW) - 6));
+      ctx.globalAlpha = 1;
+      continue;
+    }
+    const owner = world.enemies.find((e) => e.id === b.owner);
+    const top = Math.round(px(owner ? enemyPos(owner, t).y : HOVER_ROW) + 6);
+    const bottom = VIEW_H;
+    if (t < b.start) {
+      // the warning line blinks faster as the beam gets closer
+      const u = (t - b.warn) / (b.start - b.warn);
+      if (Math.floor(t / (0.12 - 0.08 * u)) % 2 === 0) {
+        ctx.globalAlpha = 0.5 + 0.5 * u;
+        ctx.fillStyle = "#ffb347";
+        ctx.fillRect(cx, top, 1, bottom - top);
+        ctx.globalAlpha = 1;
+      }
+      continue;
+    }
+    const flicker = Math.floor(t / 0.04) % 2 === 0 ? 1 : 0.8;
+    ctx.globalAlpha = 0.9 * flicker;
+    ctx.fillStyle = "#ffb347";
+    ctx.fillRect(cx - 3, top, 7, bottom - top);
+    ctx.fillStyle = GLOW;
+    ctx.fillRect(cx - 2, top, 5, bottom - top);
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(cx - 1, top, 2, bottom - top);
+    ctx.globalAlpha = 1;
   }
 }
 
@@ -220,12 +304,20 @@ export function render(ctx: CanvasRenderingContext2D, world: World, view: View) 
     }
     const name = (inSlot ? `enemy${e.kind}-${frame}` : `dive${e.kind}`) as SpriteName;
     const flash = t - e.hurt < 0.12; // a hit that didn't kill flashes white
-    drawSprite(ctx, name, px(p.x) + jitter, px(p.y), flash ? "#ffffff" : BODY.enemy[e.kind]);
+    const gleam = !!e.carries && (t + e.id * 0.13) % 0.8 < 0.1; // a carrier blinks gold now and then
+    drawSprite(ctx, name, px(p.x) + jitter, px(p.y), flash ? "#ffffff" : gleam ? GLOW : BODY.enemy[e.kind]);
     if (e.kind === 0 && e.hp === 1 && !flash) eyeShut(ctx, px(p.x), px(p.y), !inSlot);
     if (e.kind === 0 && e.charge !== null) eyeGlow(ctx, px(p.x), px(p.y), 1 - Math.max(0, e.charge - t) / CY_GLOW, !inSlot);
-    if (e.kind === 0 && d?.phase === "park") {
+    if (e.kind === 0 && d?.phase === "park" && e.carries !== "beam") {
       const into = (t - d.since) % CY_GLOW;
       eyeGlow(ctx, px(p.x), px(p.y), into / CY_GLOW, true);
+    }
+    if (e.kind === 0 && d?.phase === "park" && e.carries === "beam") eyeGlow(ctx, px(p.x), px(p.y), Math.min(1, (t - d.since) / 0.8), true);
+    if (e.carries) {
+      // a carrier's weapon glows over it, in the empty strip above its sprite
+      ctx.globalAlpha = 0.65 + 0.35 * Math.sin(t * 8);
+      icon(ctx, e.carries, px(p.x), px(p.y) - 8);
+      ctx.globalAlpha = 1;
     }
   }
   for (const pop of world.pops) {
@@ -233,6 +325,23 @@ export function render(ctx: CanvasRenderingContext2D, world: World, view: View) 
     if (frame < 3) drawSprite(ctx, `pop-${frame + 1}` as SpriteName, px(pop.x), px(pop.y), BODY.enemy[pop.kind]);
   }
 
+  if (!after) {
+    for (const m of world.minis) mini(ctx, px(m.x), px(m.y), BODY.enemy[2], false);
+    for (const p of world.pickups) {
+      // falling, it flips; on your row it sits on a gold tile and blinks through its last second
+      const blink = p.landed !== null && t - p.landed > PICKUP_STAYS - PICKUP_BLINK && Math.floor(t / 0.1) % 2 === 0;
+      if (blink) continue;
+      const cx = px(p.x);
+      const cy = px(p.y);
+      ctx.fillStyle = GLOW;
+      ctx.fillRect(Math.round(cx - 7), Math.round(cy - 7), 14, 14);
+      ctx.fillStyle = "#0b0d1c";
+      ctx.fillRect(Math.round(cx - 6), Math.round(cy - 6), 12, 12);
+      if (p.landed !== null || Math.floor(t / 0.12) % 2 === 0) icon(ctx, p.weapon, cx, cy, 2);
+      else icon(ctx, p.weapon, cx, cy, 1);
+    }
+    beams(ctx, world, t, BODY[view.who]);
+  }
   for (const b of after ? bulletsAt(after.a, after.s) : world.bullets) drawSprite(ctx, b.from === 0 ? "bullet-aim" : "bullet", px(b.x), px(b.y));
   for (const s of after ? shotsAt(after.a, after.s) : world.shots) drawSprite(ctx, "shot", px(s.x), px(s.y));
 
@@ -242,6 +351,7 @@ export function render(ctx: CanvasRenderingContext2D, world: World, view: View) 
   if (view.boomMs === null) {
     const thrust = Math.floor(t / THRUST_S) % 2 === 1;
     drawSprite(ctx, thrust ? "ship-thrust" : "ship", sx, sy, ship);
+    for (const w of wingmen(world)) mini(ctx, px(w.x), sy + 2, ship, true);
   } else {
     const frame = Math.floor(view.boomMs / BOOM_FRAME_MS);
     if (frame < 4) drawSprite(ctx, `boom-${frame + 1}` as SpriteName, sx, sy, ship);

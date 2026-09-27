@@ -56,7 +56,7 @@ Source: `enemy-design.md`, which has every number.
 - [x] Each kind dives its own way, with its path drawn before it lands.
 - [x] Every wave flies in along drawn paths before the formation settles.
 - [x] A Cyclops takes two hits, and Jev can read that one is hit once.
-- [ ] A carrier uses its weapon until it's shot, and the dropped weapon can be grabbed and used until the wave ends.
+- [x] A carrier uses its weapon until it's shot, and the dropped weapon can be grabbed and used until the wave ends.
 - [ ] Waves 1 to 6 follow the escalation table in `enemy-design.md`.
 - [ ] Enemies drift, dive and fire without any input.
 - [ ] A shot destroys the enemy it reaches; the score goes up.

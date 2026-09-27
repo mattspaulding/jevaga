@@ -1,4 +1,4 @@
-import type { Bullet, Kind, Pop, Shot, World } from "./world";
+import { PICKUP_STAYS, type Beam, type Bullet, type Kind, type Pickup, type Pop, type Shot, type World } from "./world";
 
 // Turns what changed in the fight since the last frame into sound cues. It
 // only reads the world, so the engine and its replays stay exactly as they were.
@@ -18,11 +18,23 @@ export type Cue =
   | { name: "loop" } // a Cyclops leaves the formation
   | { name: "glow" } // a Cyclops's eye starts to glow
   | { name: "zap" } // a Cyclops fires an aimed shot
-  | { name: "drip" }; // a Bat drops a bullet
+  | { name: "drip" } // a Bat drops a bullet
+  | { name: "drop" } // a carrier's weapon starts falling
+  | { name: "grab" } // you take a weapon
+  | { name: "warn" } // a carrier Cyclops's beam warning line appears
+  | { name: "beam" } // its beam fills the column
+  | { name: "lance" } // you fire your own Eye Beam
+  | { name: "shield" }; // one of your Wingmen takes a hit for you
+
+const wingCount = (w: World) => (w.weapon === "wingmen" ? w.wings.filter(Boolean).length : 0);
 
 export function createCueTracker() {
   let world: World | null = null;
-  let seen = new WeakSet<Bullet | Shot | Pop>();
+  let seen = new WeakSet<Bullet | Shot | Pop | Beam | Pickup>();
+  let firing = new WeakSet<Beam>(); // enemy beams already heard firing
+  let floor: Pickup[] = []; // pickups there last frame, to tell a grab from one timing out
+  let wings = 0;
+  let held: World["weapon"] = null; // the weapon last frame: a swap or a wave's end isn't a wingman lost
   let wave = 0;
   let alive = true;
   let phase = new Map<number, string>();
@@ -34,7 +46,11 @@ export function createCueTracker() {
   function take(w: World) {
     world = w;
     seen = new WeakSet();
-    for (const o of [...w.bullets, ...w.shots, ...w.pops]) seen.add(o);
+    for (const o of [...w.bullets, ...w.shots, ...w.pops, ...w.beams, ...w.pickups]) seen.add(o);
+    firing = new WeakSet(w.beams.filter((b) => w.t >= b.start));
+    floor = [...w.pickups];
+    wings = wingCount(w);
+    held = w.weapon;
     wave = w.wave;
     alive = w.alive;
     phase = new Map(w.enemies.map((e) => [e.id, e.alive && e.diving ? e.diving.phase : "formation"]));
@@ -53,8 +69,30 @@ export function createCueTracker() {
       for (const s of w.shots)
         if (!seen.has(s)) {
           seen.add(s);
-          cues.push({ name: "shot" });
+          if (s.lead) cues.push({ name: "shot" }); // one sound per volley, not per Fan or Wingman shot
         }
+      for (const b of w.beams) {
+        if (!seen.has(b)) {
+          seen.add(b);
+          cues.push({ name: b.from === "ship" ? "lance" : "warn" });
+        }
+        if (b.from === "enemy" && w.t >= b.start && !firing.has(b)) {
+          firing.add(b);
+          cues.push({ name: "beam" });
+        }
+      }
+      for (const p of w.pickups)
+        if (!seen.has(p)) {
+          seen.add(p);
+          cues.push({ name: "drop" });
+        }
+      // A pickup that vanished before its time was up was taken.
+      if (floor.some((p) => !w.pickups.includes(p) && (p.landed === null || w.t - p.landed < PICKUP_STAYS - 0.05))) cues.push({ name: "grab" });
+      floor = [...w.pickups];
+      const nowWings = wingCount(w);
+      if (held === "wingmen" && w.weapon === "wingmen" && nowWings < wings) cues.push({ name: "shield" });
+      wings = nowWings;
+      held = w.weapon;
       for (const p of w.pops)
         if (!seen.has(p)) {
           seen.add(p);

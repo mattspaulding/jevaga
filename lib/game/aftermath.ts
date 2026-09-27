@@ -94,7 +94,7 @@ export function bulletsAt(a: Aftermath, s: number): Bullet[] {
 }
 
 export function shotsAt(a: Aftermath, s: number): Shot[] {
-  return a.shots.map((sh) => ({ x: sh.x, y: sh.y - 12 * s })).filter((sh) => sh.y > -1);
+  return a.shots.map((sh) => ({ ...sh, x: sh.x + sh.vx * s, y: sh.y - 12 * s })).filter((sh) => sh.y > -1 && sh.x > -1 && sh.x < COLS);
 }
 
 // Each piece of the ship: where it is and how much of it is left to see.

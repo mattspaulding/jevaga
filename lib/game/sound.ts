@@ -22,6 +22,8 @@ let active = 0;
 const buffers = new Map<string, AudioBuffer>();
 const turn = new Map<string, number>(); // the next variant for each sound, so repeats never play the same take twice running
 
+// A sound the set doesn't have yet is skipped rather than breaking the frame that asked for it.
+const has = (name: SoundName) => typeof (SET.voices as Partial<Record<SoundName, unknown>>)[name] === "function";
 const keyOf = (name: SoundName, kind: 0 | 1 | 2 | undefined, variant: number) => `${name}|${kind}|${variant}`;
 const KINDED: SoundName[] = ["pop", "swoop"];
 
@@ -42,7 +44,7 @@ function bufferFor(ctx: BaseAudioContext, name: SoundName, kind: 0 | 1 | 2 | und
 // the engine can be asked for costs about 25 ms).
 function warm(ctx: AudioContext) {
   const todo: [SoundName, 0 | 1 | 2 | undefined, number][] = [];
-  for (const name of SOUND_NAMES)
+  for (const name of SOUND_NAMES.filter(has))
     for (const kind of KINDED.includes(name) ? ([0, 1, 2] as const) : [undefined])
       for (let v = 0; v < VARIANTS; v++) todo.push([name, kind, v]);
   const step = () => {
@@ -87,7 +89,7 @@ export const sound = {
     }
   },
   play(cue: Play | Cue) {
-    if (sound.isMuted() || !ac || !master || ac.state !== "running" || active >= MAX_VOICES) return;
+    if (sound.isMuted() || !ac || !master || ac.state !== "running" || active >= MAX_VOICES || !has(cue.name)) return;
     const kind = "kind" in cue ? cue.kind : undefined;
     const variant = turn.get(cue.name) ?? 0;
     turn.set(cue.name, (variant + 1) % VARIANTS);

@@ -12,6 +12,7 @@ import {
   advance,
   batZigX,
   arriving,
+  BEAM_WARN,
   COMMIT_ROW,
   DECISION_SECONDS,
   drift,
@@ -22,6 +23,8 @@ import {
   landingX,
   movePath,
   newWorld,
+  PICKUP_FALL,
+  PICKUP_STAYS,
   resetRun,
   restX,
   SHIP_ROW,
@@ -113,6 +116,230 @@ function immortal(w: World) {
   check(`from wave 2, every Bat drops a bullet on the way in (${shots[1]} of 7) and every other Cyclops fires an aimed shot (${shots[0]} of 4)`, shots[1] === 7 && shots[0] === 4);
 }
 
+// Carriers: which kinds carry, by wave, and the carrier makes the wave's second dive.
+{
+  const w = newWorld(3);
+  const carriers = (v: World) => v.enemies.filter((e) => e.carries).map((e) => `${["Cyclops", "Bat", "Drone"][e.kind]}:${e.carries}`).sort().join(",");
+  const byWave: string[] = [carriers(w)];
+  for (let wave = 2; wave <= 7; wave++) {
+    for (const e of w.enemies) e.alive = false;
+    stepN(w, 1);
+    byWave.push(carriers(w));
+  }
+  check(
+    `carriers by wave: ${byWave.join(" | ")}`,
+    JSON.stringify(byWave) ===
+      JSON.stringify(["Bat:fan", "Drone:wingmen", "Cyclops:beam", "Bat:fan,Drone:wingmen", "Bat:fan,Cyclops:beam,Drone:wingmen", "Bat:fan,Cyclops:beam,Drone:wingmen", "Bat:fan,Cyclops:beam,Drone:wingmen"]),
+  );
+  let second = true;
+  let seen = 0;
+  for (let seed = 1; seed <= 20; seed++) {
+    const v = newWorld(seed);
+    const carrier = v.enemies.find((e) => e.carries)!;
+    let dives = 0;
+    for (let i = 0; i < 40 / 0.02 && v.divesThisWave < 2 && carrier.alive; i++) {
+      stepN(v, 1);
+      immortal(v);
+      if (v.divesThisWave !== dives) dives = v.divesThisWave;
+    }
+    if (v.divesThisWave === 2) {
+      seen++;
+      if (!carrier.diving) second = false;
+    }
+  }
+  check(`the carrier makes the wave's second dive (${seen} fights)`, second && seen >= 15);
+  // and only once each: in a wave with two carriers, dives 2 and 3 send them, then anyone can dive
+  const v = newWorld(11);
+  for (let wave = 2; wave <= 4; wave++) {
+    for (const e of v.enemies) e.alive = false;
+    stepN(v, 1);
+  }
+  const order: number[] = [];
+  const started = new Set<number>();
+  for (let i = 0; i < 90 / 0.02 && order.length < 10; i++) {
+    stepN(v, 1);
+    immortal(v);
+    for (const e of v.enemies)
+      if (e.diving && ["rev", "flap", "open"].includes(e.diving.phase) && !started.has(e.diving.since)) {
+        started.add(e.diving.since);
+        order.push(e.carries ? 1 : 0);
+      }
+  }
+  check(`with two carriers, dives 2 and 3 are the carriers and later dives are anyone (${order.join("")})`, order.length >= 8 && order[1] === 1 && order[2] === 1 && order.slice(3).filter((c) => c === 1).length <= 2);
+}
+
+// A carrier Bat's Fan: every bullet it fires becomes three.
+{
+  const w = quiet();
+  w.ship.x = 7;
+  const bat = find(w, 1, 4);
+  bat.carries = "fan";
+  startDive(w, bat);
+  const shots: Bullet[] = [];
+  until(w, () => {
+    for (const b of w.bullets) if (!shots.includes(b)) shots.push(b);
+    return bat.diving?.phase === "commit";
+  });
+  const drifts = shots.map((b) => b.vx).sort((a, b) => a - b);
+  check(`a carrier Bat's two dive shots come as fans of three (${shots.length} bullets, drifts ${[...new Set(drifts)].join(" ")})`, shots.length === 6 && drifts[0] === -2 && drifts[5] === 2 && drifts.filter((v) => v === 0).length === 2);
+}
+
+// A carrier Drone's Wingmen fall a column either side of it: one column aside isn't safe, two is.
+{
+  const run = (shipAfter: number) => {
+    const w = quiet();
+    w.ship.x = 5;
+    const d = find(w, 2, 3);
+    d.carries = "wingmen";
+    startDive(w, d);
+    w.ship.x = shipAfter;
+    const minis = new Set<number>();
+    const hit = until(w, () => {
+      for (const m of w.minis) minis.add(m.x);
+      return e0(w) && false;
+    }, 6);
+    return { hit, by: w.hitBy?.by, minis: [...minis].sort() };
+  };
+  const e0 = (w: World) => w.minis.length > 0;
+  const aside = run(4);
+  const clear = run(3);
+  check(`two mini-drones fall beside a carrier Drone (x ${aside.minis.join(", ")}), and one column aside is hit by one (${aside.by})`, JSON.stringify(aside.minis) === "[4,6]" && aside.hit === "hit" && aside.by === "Drone");
+  check("two columns clear of a carrier Drone is safe", clear.hit === null);
+}
+
+// A carrier Cyclops's Eye Beam: no aimed shots, a warning line for 0.8 s, then the column is deadly for 0.5 s.
+{
+  const w = quiet();
+  w.ship.x = 3;
+  const c = find(w, 0, 5);
+  c.carries = "beam";
+  startDive(w, c);
+  until(w, () => c.diving?.phase === "park");
+  const parked = w.t;
+  const predicted = threatAt(w, 3, 2.5);
+  const hit = until(w, () => false, 3);
+  check(`a ship that stays in the column is hit by the Cyclops beam when it fires (${(w.t - parked).toFixed(2)} s after it parks)`, hit === "hit" && w.hitBy?.by === "Cyclops beam" && near(w.t - parked, BEAM_WARN, 0.03));
+  check("the beam's warning replaces the aimed shots", w.bullets.every((b) => b.from !== 0));
+  check("threatAt predicts the beam exactly", !!predicted && predicted.by === "Cyclops beam" && near(parked + predicted.at, w.t, 1e-6));
+  const v = quiet();
+  v.ship.x = 3;
+  const c2 = find(v, 0, 5);
+  c2.carries = "beam";
+  startDive(v, c2);
+  until(v, () => c2.diving?.phase === "park");
+  v.ship.x = 4.5;
+  check("a ship a column and a half away is missed by the beam and the drop", until(v, () => c2.diving?.phase === "home", 5) === null);
+  const k = quiet();
+  k.ship.x = 3;
+  const c3 = find(k, 0, 5);
+  c3.carries = "beam";
+  startDive(k, c3);
+  until(k, () => c3.diving?.phase === "park");
+  stepN(k, 10);
+  c3.hp = 1;
+  const p = enemyPos(c3, k.t);
+  k.shots.push({ x: p.x, y: p.y + 0.3, vx: 0, lead: true });
+  stepN(k, 1);
+  check("shooting a carrier Cyclops during its warning puts the beam out", !c3.alive && k.beams.length === 0 && until(k, () => false, 1.5) === null);
+}
+
+// A carrier drops its weapon: it falls to your row, waits 4 s, and gliding onto it takes it.
+{
+  const w = quiet();
+  w.ship.x = 0;
+  const bat = find(w, 1, 4);
+  bat.carries = "fan";
+  const p0 = enemyPos(bat, 0);
+  for (const e of w.enemies) if (e.slot.col === 4 && e.kind === 2) e.alive = false;
+  w.shots.push({ x: p0.x, y: p0.y + 0.3, vx: 0, lead: true });
+  stepN(w, 1);
+  const drop = w.pickups[0];
+  check("shooting a carrier drops its weapon", !bat.alive && !!drop && drop.weapon === "fan" && drop.x === Math.round(p0.x));
+  const from = drop.y;
+  const t0 = w.t;
+  until(w, () => drop.landed !== null);
+  check(`it falls at ${PICKUP_FALL} rows a second to your row (${(w.t - t0).toFixed(2)} s)`, near(w.t - t0, (SHIP_ROW - from) / PICKUP_FALL, 0.03));
+  const landed = w.t;
+  until(w, () => w.pickups.length === 0, 6);
+  check(`left alone, it's gone ${PICKUP_STAYS} s after it lands`, near(w.t - landed, PICKUP_STAYS, 0.03) && w.weapon === null);
+  const v = quiet();
+  const bat2 = find(v, 1, 4);
+  bat2.carries = "fan";
+  for (const e of v.enemies) if (e.slot.col === 4 && e.kind === 2) e.alive = false;
+  const q = enemyPos(bat2, 0);
+  v.shots.push({ x: q.x, y: q.y + 0.3, vx: 0, lead: true });
+  stepN(v, 1);
+  v.ship.x = v.pickups[0].x;
+  until(v, () => v.weapon !== null, 4);
+  check("gliding onto it takes it", v.weapon === "fan" && v.pickups.length === 0);
+}
+
+// Your weapons.
+{
+  const w = quiet();
+  w.weapon = "fan";
+  fire(w);
+  check("with the Fan, one shot is three", w.shots.length === 3 && w.shots.filter((s) => s.lead).length === 1);
+  stepN(w, 18);
+  fire(w);
+  stepN(w, 18);
+  fire(w);
+  check("and a fan counts as one of your three shots on screen", w.shots.filter((s) => s.lead).length === 3 && w.shots.length >= 7);
+  const side = w.shots.find((s) => s.vx > 0)!;
+  check("its side shots angle out a column for every three rows", near(side.vx, 4, 1e-9));
+}
+{
+  const w = quiet();
+  w.weapon = "beam";
+  const x = enemyPos(find(w, 0, 4), 0).x;
+  w.ship.x = x;
+  const before = w.kills;
+  fire(w);
+  check("your Eye Beam hits everything in your column at once (the Drone and the Bat go, the Cyclops loses one hit)", w.kills === before + 2 && find(w, 0, 4).alive && find(w, 0, 4).hp === 1 && w.shots.length === 0);
+  check("and reloads in 0.7 s", near(gunReadyIn(w), 0.7));
+}
+{
+  const w = quiet();
+  w.weapon = "wingmen";
+  w.wings = [true, true];
+  w.ship.x = 4;
+  fire(w);
+  check("your Wingmen fire with you", JSON.stringify(w.shots.map((s) => s.x).sort()) === "[3,4,5]");
+  w.bullets.push(batBullet(5, SHIP_ROW - 2));
+  const hit = until(w, () => w.bullets.length === 0, 1);
+  check("a bullet that reaches a wingman destroys it instead of the ship", hit === null && w.alive && JSON.stringify(w.wings) === "[true,false]");
+  w.pickups.push({ weapon: "fan", x: w.ship.x, y: SHIP_ROW, landed: w.t });
+  stepN(w, 1);
+  const held = (v: World) => v.weapon;
+  check("a second weapon replaces the first", held(w) === "fan" && w.pickups.length === 0);
+  w.weapon = "wingmen";
+  for (const e of w.enemies) e.alive = false;
+  stepN(w, 1);
+  check("a weapon lasts until the wave ends", w.weapon === null);
+}
+
+// Review fixes, 2026-09-26: the text and cues around carriers match the engine.
+{
+  const w = quiet();
+  w.ship.x = 0;
+  const d = find(w, 2, 1);
+  d.carries = "wingmen";
+  startDive(w, d);
+  const said = describeFight(w);
+  until(w, () => d.diving?.phase === "fall");
+  check(`a carrier Drone at the edge is described with the one mini-drone it brings (${w.minis.length})`, /with a mini-drone falling beside it down x 1\.0/.test(said) && w.minis.length === 1);
+  const v = quiet();
+  v.weapon = "wingmen";
+  v.wings = [true, true];
+  const cues = createCueTracker();
+  cues.update(v);
+  v.pickups.push({ weapon: "fan", x: v.ship.x, y: SHIP_ROW, landed: v.t });
+  cues.update(v); // a frame with the Fan on the floor
+  stepN(v, 1);
+  const heard = cues.update(v).map((c) => c.name);
+  check(`swapping Wingmen for another weapon sounds like a grab, not a wingman lost (${heard.join(", ")})`, heard.includes("grab") && !heard.includes("shield"));
+}
+
 // A Cyclops takes two hits.
 {
   const w = quiet();
@@ -121,7 +348,7 @@ function immortal(w: World) {
   // A shot just under it (the formation drifts, so a shot from the ship could miss).
   const shoot = () => {
     const p = enemyPos(c, w.t);
-    w.shots.push({ x: p.x, y: p.y + 0.3 });
+    w.shots.push({ x: p.x, y: p.y + 0.3, vx: 0, lead: true });
     stepN(w, 1);
   };
   shoot();
@@ -136,7 +363,7 @@ function immortal(w: World) {
   until(v, () => d.diving?.phase === "slide");
   for (let i = 0; i < 2; i++) {
     const p = enemyPos(d, v.t);
-    v.shots.push({ x: p.x, y: p.y + 0.3 });
+    v.shots.push({ x: p.x, y: p.y + 0.3, vx: 0, lead: true });
     stepN(v, 1);
   }
   check("a diving Cyclops is worth 400", !d.alive && v.score === 400);
@@ -533,7 +760,7 @@ function immortal(w: World) {
     if (i % 3 === 0) hear(cues.update(w)); // frames and steps don't line up; a second look changes nothing
   }
   const n = (k: string) => heard[k] ?? 0;
-  check(`one start cue, then a shot cue per shot fired (${n("shot")} of ${fired})`, n("start") === 1 && n("shot") === fired && fired > 50);
+  check(`one start cue, then one shot or lance cue per trigger pull (${n("shot")} + ${n("lance")} of ${fired})`, n("start") === 1 && n("shot") + n("lance") === fired && fired > 50);
   check(`a pop per kill (${n("pop")} of ${w.kills}), a tink per first Cyclops hit (${n("tink")} of ${wounded})`, n("pop") === w.kills && w.kills > 10 && n("tink") === wounded);
   check(`a boom per hit (${n("boom")} of ${hits}), three swoops per fly-in (${n("swoop")} over ${waves} waves)`, n("boom") === hits && hits > 0 && n("swoop") === 3 * waves);
   check(`a rev per Drone dive (${n("rev")}/${launched.rev}), a flutter per Bat (${n("flutter")}/${launched.flutter}), a loop per Cyclops (${n("loop")}/${launched.loop})`, n("rev") === launched.rev && n("flutter") === launched.flutter && n("loop") === launched.loop && launched.rev > 0);

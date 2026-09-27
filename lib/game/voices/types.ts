@@ -21,6 +21,12 @@ export const SOUND_NAMES = [
   "rewind",
   "kept",
   "reject",
+  "drop",
+  "grab",
+  "warn",
+  "beam",
+  "lance",
+  "shield",
 ] as const;
 export type SoundName = (typeof SOUND_NAMES)[number];
 
@@ -51,4 +57,10 @@ export const SOUND_BRIEF: Record<SoundName, { when: string; often: string; lengt
   rewind: { when: "the game rewinds to replay the ship's last death with a new rule", often: "once after each death", length: "0.3 to 0.6 s" },
   kept: { when: "the replay proved the new rule works and it's kept: a small win", often: "after some deaths", length: "0.4 to 0.8 s" },
   reject: { when: "the replay showed the new rule didn't work and it's thrown out", often: "after some deaths", length: "0.3 to 0.6 s" },
+  drop: { when: "a carrier enemy is shot and the weapon it carried flips out and starts falling toward the player's row: an opportunity", often: "a few a wave", length: "0.3 to 0.5 s" },
+  grab: { when: "the player glides onto a dropped weapon and takes it (Wingmen, Fan or Eye Beam): a power-up", often: "a few a wave", length: "0.4 to 0.7 s" },
+  warn: { when: "a carrier Cyclops's Eye Beam warning line runs down its column for exactly 0.8 s before the beam fires: a strong warning that must build", often: "a few a wave", length: "exactly 0.8 s" },
+  beam: { when: "a carrier Cyclops's Eye Beam fills its whole column for 0.5 s: the most dangerous attack in the game", often: "a few a wave", length: "exactly 0.5 s" },
+  lance: { when: "the player fires their own Eye Beam: an instant beam up the whole column that hits every enemy in it", often: "up to about 1.4 a second while held", length: "under 0.3 s" },
+  shield: { when: "one of the player's two Wingmen takes a bullet or a diver for the ship and is destroyed (the ship survives)", often: "rare", length: "0.2 to 0.4 s" },
 };

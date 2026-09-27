@@ -1,20 +1,19 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import arcade from "@/lib/game/voices/arcade";
 import juicy from "@/lib/game/voices/juicy";
 import { montage } from "@/lib/game/voices/montage";
-import sfxr from "@/lib/game/voices/sfxr";
 import { SOUND_BRIEF, SOUND_NAMES, type SoundName, type VoiceSet } from "@/lib/game/voices/types";
-import v1 from "@/lib/game/voices/v1";
 
-// Every candidate voice set side by side. Click to hear a sound, "×4" to hear
-// its four variants in a row the way repeats sound in a fight, pick the best
-// take per sound, and save: the picks go to sound-lab/picks.json.
+// The game's sounds (and any candidate sets added to SETS) side by side. Click
+// to hear a sound, "×4" to hear its four variants in a row the way repeats
+// sound in a fight, pick the best take per sound, and save: the picks go to
+// sound-lab/picks.json. Matt picked juicy for every sound on 2026-09-26; the
+// other sets are in git history (a4b76bc).
 
-const SETS = ["v1", "arcade", "sfxr", "juicy"] as const;
+const SETS = ["juicy"] as const;
 type SetName = (typeof SETS)[number];
-const VOICE_SETS: Record<SetName, VoiceSet> = { v1, arcade, sfxr, juicy };
+const VOICE_SETS: Record<SetName, VoiceSet> = { juicy };
 const KINDS = [
   ["Cyclops", 0],
   ["Bat", 1],
@@ -104,7 +103,7 @@ export default function SoundLab() {
     <main className="lab">
       <h1 className="title">SOUND PANEL</h1>
       <p className="labIntro">
-        Four sets of the same 17 sounds. v1 is what&apos;s in the game now. Click ▶ to hear one, ×4 to hear its four variants back to back. Pick the best take for each sound (from any set), add a note where something&apos;s off, and save.
+        The game&apos;s sounds. Click ▶ to hear one, ×4 to hear its four variants back to back. Add a note where something&apos;s off, and save.
       </p>
       <table className="labTable">
         <thead>

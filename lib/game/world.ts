@@ -62,6 +62,29 @@ export const ENTRY_FIRE_ROW = 5; // from wave 2, an entering Bat drops a bullet 
 const ENTRY_GLOW_ROW = 3; // and an entering Cyclops starts its eye glow here
 const ENTRY_REST = 1; // after the last enemy reaches its slot, dives and volleys wait this long
 const CY_HP = 2; // a Cyclops takes two hits
+
+// Carriers and weapons (enemy-design.md, section 2). A carrier uses its kind's
+// weapon on you; shoot it and the weapon falls to your row, and whoever glides
+// onto it holds it until the wave ends. A second weapon replaces the first.
+export type Weapon = "beam" | "fan" | "wingmen";
+export const WEAPON_OF: Weapon[] = ["beam", "fan", "wingmen"]; // by kind: Cyclops, Bat, Drone
+export const WEAPON_NAME: Record<Weapon, string> = { beam: "Eye Beam", fan: "Fan", wingmen: "Wingmen" };
+// Which kinds carry a weapon, by wave (the carriers column of section 4). Wave 7 on: one of each.
+const CARRIERS: Kind[][] = [[1], [2], [0], [1, 2], [1, 2, 0], [1, 2, 0]];
+const FAN_DRIFT = 2; // a carrier Bat's side bullets drift out this many columns a second
+const PLAYER_FAN = 4; // your Fan's side shots: one column out for every three rows up
+export const PICKUP_FALL = 4; // rows per second
+export const PICKUP_STAYS = 4; // seconds on your row before it's gone
+export const PICKUP_BLINK = 1; // it blinks through its last second
+const PICKUP_REACH = 0.6; // how close the ship has to be to take it
+export const BEAM_WARN = 0.8; // a carrier Cyclops's warning line, then
+export const BEAM_ON = 0.5; // its beam fills the column for this long
+export const BEAM_HALF = 0.2; // half a beam's width, in columns
+const LANCE_SHOW = 0.15; // how long your own beam stays on screen
+const BEAM_RELOAD = 0.7; // your Eye Beam reloads slower than the gun
+export const WING_OFFSET = 1; // your Wingmen fly a column either side of the ship
+const WING_HALF = 0.3; // a wingman is half a Drone: this is half its width
+const MINI_REACH = 0.5; // a carrier Drone's mini-drones are smaller than a Drone
 const DIVE_WEIGHT = [1, 2, 3]; // Cyclops, Bat, Drone: Drones dive most often
 const AT_ONCE = 1; // attacks under way at once
 const DIVE_GAP = 0.8; // the next dive waits at least this long after an attack ends
@@ -97,13 +120,21 @@ export type Enemy = {
   hurt: number; // when it last took a hit that didn't kill it, for the flash
   diving: Dive | null;
   charge: number | null; // a Cyclops fires an aimed shot at this time
+  carries: Weapon | null; // a carrier: uses this weapon, and drops it when it's shot
+  dived: boolean; // has dived this wave (each carrier is sent once, right after the wave's first dive)
 };
 export type Bullet = { x: number; y: number; vx: number; vy: number; from: Kind };
-export type Shot = { x: number; y: number };
+// lead: the one shot of a volley that counts toward the three on screen (a
+// Fan's side shots and the Wingmen's shots don't).
+export type Shot = { x: number; y: number; vx: number; lead: boolean };
+export type Mini = { x: number; y: number }; // a carrier Drone's mini-drone, falling beside it
+// An Eye Beam: a carrier Cyclops's (warning from `warn`, deadly from `start` to `end`) or your own, which is instant.
+export type Beam = { x: number; from: "enemy" | "ship"; owner: number; warn: number; start: number; end: number };
+export type Pickup = { weapon: Weapon; x: number; y: number; landed: number | null }; // landed: when it reached your row
 export type Pop = { x: number; y: number; kind: Kind; t: number }; // an enemy destroyed at (x, y) at time t
 
 // What hits the ship, by name, so Jev and the coach can tell enemies apart.
-export const THREATS = ["Drone", "Bat", "Cyclops", "Bat bullet", "Cyclops shot"] as const;
+export const THREATS = ["Drone", "Bat", "Cyclops", "Bat bullet", "Cyclops shot", "Cyclops beam"] as const;
 export type Threat = (typeof THREATS)[number];
 export type HitBy = { by: Threat; x: number; y: number };
 
@@ -119,6 +150,12 @@ export type World = {
   bullets: Bullet[];
   shots: Shot[];
   pops: Pop[]; // recent kills, kept briefly so the canvas can draw them bursting
+  minis: Mini[];
+  beams: Beam[];
+  pickups: Pickup[];
+  weapon: Weapon | null; // what you hold until the wave ends
+  wings: [boolean, boolean]; // with Wingmen: whether the left and right one are still there
+  divesThisWave: number; // a carrier makes the wave's second dive
   score: number;
   kills: number;
   wave: number;
@@ -210,6 +247,8 @@ function formation(t: number, wave: number): Enemy[] {
         hp: kind === 0 ? CY_HP : 1,
         hurt: -1,
         charge: null,
+        carries: null,
+        dived: false,
         diving: { phase: "enter", since, x: start.x, y: start.y, col: 0, x0: 0, y0: 0, dir: 1, vx: 0, fired: fires ? 0 : 1, path },
       });
     }
@@ -223,7 +262,7 @@ export function enemyPos(e: Enemy, t: number): { x: number; y: number } {
 }
 
 export function newWorld(seed: number): World {
-  return {
+  const world: World = {
     seed,
     rngState: seed >>> 0,
     t: 0,
@@ -233,6 +272,12 @@ export function newWorld(seed: number): World {
     bullets: [],
     shots: [],
     pops: [],
+    minis: [],
+    beams: [],
+    pickups: [],
+    weapon: null,
+    wings: [false, false],
+    divesThisWave: 0,
     score: 0,
     kills: 0,
     wave: 1,
@@ -241,6 +286,16 @@ export function newWorld(seed: number): World {
     alive: true,
     hitBy: null,
   };
+  pickCarriers(world);
+  return world;
+}
+
+// The seed picks which enemy of each carrier kind carries this wave's weapon.
+function pickCarriers(world: World) {
+  for (const kind of CARRIERS[Math.min(world.wave, CARRIERS.length) - 1]) {
+    const pool = world.enemies.filter((e) => e.kind === kind && !e.carries);
+    if (pool.length) pool[Math.floor(rand(world) * pool.length)].carries = WEAPON_OF[kind];
+  }
 }
 
 // The fight's random numbers: dive and volley picks. Advances world.rngState.
@@ -261,15 +316,53 @@ export const arriving = (e: Enemy) => e.alive && !!e.diving && (e.diving.phase =
 // Attacking: a dive under way, as opposed to arriving or flying home.
 export const attacking = (e: Enemy) => e.alive && !!e.diving && !arriving(e) && e.diving.phase !== "home";
 
+const beamOn = (b: Beam, t: number) => b.from === "enemy" && t >= b.start && t < b.end;
+const beamHits = (b: Beam, x: number, half: number) => Math.abs(b.x - x) < BEAM_HALF + half;
+const miniHits = (m: Mini, x: number, reach: number) => Math.abs(m.x - x) < reach && Math.abs(m.y - SHIP_ROW) < reach;
+
 function shipHit(world: World): HitBy | null {
   const { x } = world.ship;
   const b = world.bullets.find((b) => bulletHits(b, x));
   if (b) return { by: b.from === 0 ? "Cyclops shot" : "Bat bullet", x: b.x, y: b.y };
   const e = world.enemies.find((e) => attacking(e) && diverHits(e.diving!, x));
-  return e ? { by: KIND_NAME[e.kind], x: e.diving!.x, y: e.diving!.y } : null;
+  if (e) return { by: KIND_NAME[e.kind], x: e.diving!.x, y: e.diving!.y };
+  const m = world.minis.find((m) => miniHits(m, x, MINI_REACH));
+  if (m) return { by: "Drone", x: m.x, y: m.y };
+  const beam = world.beams.find((bm) => beamOn(bm, world.t) && beamHits(bm, x, SHIP_HALF));
+  return beam ? { by: "Cyclops beam", x: beam.x, y: SHIP_ROW } : null;
+}
+
+// Where your Wingmen are, if you have them: a column either side, and only on the field.
+export function wingmen(world: World): { x: number; side: 0 | 1 }[] {
+  if (world.weapon !== "wingmen") return [];
+  return ([0, 1] as const).flatMap((side) => {
+    const x = world.ship.x + (side === 0 ? -WING_OFFSET : WING_OFFSET);
+    return world.wings[side] && x >= 0 && x <= COLS - 1 ? [{ x, side }] : [];
+  });
+}
+
+// A wingman is destroyed by the first bullet, diver, mini-drone or beam that
+// touches it, and that one doesn't reach the ship.
+function wingsTakeHits(world: World) {
+  for (const w of wingmen(world)) {
+    const b = world.bullets.findIndex((b) => Math.abs(b.x - w.x) < WING_HALF && Math.abs(b.y - SHIP_ROW) < 0.5);
+    const hit =
+      b >= 0 ||
+      world.enemies.some((e) => attacking(e) && Math.abs(e.diving!.x - w.x) < DIVER_REACH && Math.abs(e.diving!.y - SHIP_ROW) < DIVER_REACH) ||
+      world.minis.some((m) => miniHits(m, w.x, MINI_REACH)) ||
+      world.beams.some((bm) => beamOn(bm, world.t) && beamHits(bm, w.x, WING_HALF));
+    if (!hit) continue;
+    if (b >= 0) world.bullets.splice(b, 1);
+    world.wings[w.side] = false;
+  }
 }
 
 const straight = (x: number, y: number): Bullet => ({ x, y: y + 0.5, vx: 0, vy: BULLET_SPEED, from: 1 });
+// A Bat's bullet; a carrier Bat's Fan turns each one into three.
+function batFires(world: World, e: Enemy, x: number, y: number) {
+  world.bullets.push(straight(x, y));
+  if (e.carries === "fan") for (const vx of [-FAN_DRIFT, FAN_DRIFT]) world.bullets.push({ ...straight(x, y), vx });
+}
 // A Cyclops shot flies straight at where the ship is when it fires, and never turns.
 function aimed(world: World, x: number, y: number): Bullet {
   const dx = world.ship.x - x;
@@ -302,6 +395,7 @@ export function startDive(world: World, e: Enemy) {
   }
   if (e.kind === 0) d.dir = col >= p.x ? 1 : -1;
   e.charge = null;
+  e.dived = true;
   e.diving = d;
 }
 
@@ -348,7 +442,12 @@ function stepDive(world: World, e: Enemy, d: Dive, dt: number) {
       break;
     }
     case "slide":
-      if (e.kind === 2 ? toward(d.col, d.y, DRONE_SLIDE) : toward(d.col, HOVER_ROW, CY_SLIDE)) next(e.kind === 2 ? "fall" : "park");
+      if (e.kind === 2 ? toward(d.col, d.y, DRONE_SLIDE) : toward(d.col, HOVER_ROW, CY_SLIDE)) {
+        next(e.kind === 2 ? "fall" : "park");
+        // a carrier Drone's Wingmen detach and fall a column either side of it
+        if (e.kind === 2 && e.carries === "wingmen")
+          for (const x of [d.col - 1, d.col + 1]) if (x >= 0 && x <= COLS - 1) world.minis.push({ x, y: d.y });
+      }
       break;
     case "fall":
       d.y += DRONE_FALL * dt;
@@ -375,6 +474,15 @@ function stepDive(world: World, e: Enemy, d: Dive, dt: number) {
       break;
     }
     case "park":
+      if (e.carries === "beam") {
+        // A carrier skips the aimed shots: a warning line, then its Eye Beam down the column.
+        if (d.fired === 0) {
+          world.beams.push({ x: d.col, from: "enemy", owner: e.id, warn: t, start: t + BEAM_WARN, end: t + BEAM_WARN + BEAM_ON });
+          d.fired = 1;
+        }
+        if (age >= BEAM_WARN + BEAM_ON) next("drop");
+        break;
+      }
       if (d.fired < CY_SHOTS && age >= CY_GLOW * (d.fired + 1)) {
         world.bullets.push(aimed(world, d.x, d.y));
         d.fired++;
@@ -397,7 +505,7 @@ function stepDive(world: World, e: Enemy, d: Dive, dt: number) {
       d.x = p.x;
       d.y = p.y;
       if (d.fired === 0 && e.kind === 1 && was < ENTRY_FIRE_ROW && d.y >= ENTRY_FIRE_ROW) {
-        world.bullets.push(straight(d.x, d.y));
+        batFires(world, e, d.x, d.y);
         d.fired = 1;
       }
       if (d.fired === 0 && e.kind === 0 && was < ENTRY_GLOW_ROW && d.y >= ENTRY_GLOW_ROW) {
@@ -409,7 +517,7 @@ function stepDive(world: World, e: Enemy, d: Dive, dt: number) {
     }
   }
   if (e.kind === 1 && d.fired < BAT_FIRE_ROWS.length && d.y >= BAT_FIRE_ROWS[d.fired]) {
-    world.bullets.push(straight(d.x, d.y));
+    batFires(world, e, d.x, d.y);
     d.fired++;
   }
   if (d.y > ROWS + 0.5) {
@@ -432,8 +540,29 @@ function step(world: World, dt: number, sim?: { shipX: number }): RunEvent {
   const t = world.t;
   if (t >= ship.glideUntil) ship.vx = 0;
 
-  for (const s of world.shots) s.y -= SHOT_SPEED * dt;
-  world.shots = world.shots.filter((s) => s.y > -1);
+  for (const s of world.shots) {
+    s.y -= SHOT_SPEED * dt;
+    s.x += s.vx * dt;
+  }
+  world.shots = world.shots.filter((s) => s.y > -1 && s.x > -1 && s.x < COLS);
+  for (const m of world.minis) m.y += DRONE_FALL * dt;
+  world.minis = world.minis.filter((m) => m.y < ROWS + 0.5);
+  world.beams = world.beams.filter((b) => t < b.end);
+  for (const p of world.pickups)
+    if (p.landed === null) {
+      p.y += PICKUP_FALL * dt;
+      if (p.y >= SHIP_ROW) {
+        p.y = SHIP_ROW;
+        p.landed = t;
+      }
+    }
+  world.pickups = world.pickups.filter((p) => p.landed === null || t - p.landed < PICKUP_STAYS);
+  const got = world.pickups.findIndex((p) => p.landed !== null && Math.abs(p.x - ship.x) < PICKUP_REACH);
+  if (got >= 0) {
+    world.weapon = world.pickups[got].weapon; // a second weapon replaces the first
+    world.wings = [true, true];
+    world.pickups.splice(got, 1);
+  }
   for (const b of world.bullets) {
     b.x += b.vx * dt;
     b.y += b.vy * dt;
@@ -462,8 +591,11 @@ function step(world: World, dt: number, sim?: { shipX: number }): RunEvent {
       const total = pool.reduce((n, e) => n + DIVE_WEIGHT[e.kind], 0);
       if (total) {
         let r = rand(world) * total;
-        const e = pool.find((e) => (r -= DIVE_WEIGHT[e.kind]) < 0) ?? pool[pool.length - 1];
+        // After the wave's first dive, each carrier still in the formation is sent once, in turn.
+        const carrier = world.divesThisWave >= 1 ? nextCarrier(world, pool) : undefined;
+        const e = carrier ?? pool.find((e) => (r -= DIVE_WEIGHT[e.kind]) < 0) ?? pool[pool.length - 1];
         startDive(world, e);
+        world.divesThisWave++;
       }
       world.nextDive = t + diveEvery(world.wave);
     }
@@ -475,7 +607,7 @@ function step(world: World, dt: number, sim?: { shipX: number }): RunEvent {
         const e = pool[Math.floor(rand(world) * pool.length)];
         if (e.kind === 1) {
           const p = slotPos(e, t);
-          world.bullets.push(straight(p.x, p.y));
+          batFires(world, e, p.x, p.y);
         } else e.charge = t + CY_GLOW;
       }
       world.nextVolley = t + VOLLEY_EVERY;
@@ -490,16 +622,13 @@ function step(world: World, dt: number, sim?: { shipX: number }): RunEvent {
     });
     if (target) {
       s.y = -99;
-      target.hp--;
-      if (target.hp > 0) {
-        target.hurt = t; // a Cyclops's first hit shuts its eye
-        continue;
-      }
-      const at = enemyPos(target, t);
-      world.pops.push({ x: at.x, y: at.y, kind: target.kind, t });
-      world.score += target.kind === 0 ? (attacking(target) ? 400 : 150) : attacking(target) ? 200 : 100;
-      target.alive = false;
-      world.kills++;
+      hitEnemy(world, target, t);
+      continue;
+    }
+    const mini = world.minis.findIndex((m) => Math.abs(m.x - s.x) < 0.4 && Math.abs(m.y - s.y) < 0.5);
+    if (mini >= 0) {
+      s.y = -99;
+      shootMini(world, mini, t);
     }
   }
   world.shots = world.shots.filter((s) => s.y > -1);
@@ -509,8 +638,12 @@ function step(world: World, dt: number, sim?: { shipX: number }): RunEvent {
     world.wave++;
     world.enemies = formation(t, world.wave);
     world.nextDive = t + diveEvery(world.wave);
+    world.weapon = null; // a weapon lasts until the wave ends
+    world.divesThisWave = 0;
+    pickCarriers(world);
   }
 
+  wingsTakeHits(world);
   const hit = shipHit(world);
   if (hit) {
     world.alive = false;
@@ -546,9 +679,52 @@ export function steer(world: World, dir: -1 | 0 | 1, seconds = Infinity) {
   world.ship.glideUntil = dir === 0 ? world.t : world.t + seconds;
 }
 
+// One hit on an enemy, from a shot or your beam: a Cyclops's first shuts its
+// eye; otherwise it's destroyed, and a carrier drops its weapon.
+function hitEnemy(world: World, e: Enemy, t: number) {
+  e.hp--;
+  if (e.hp > 0) {
+    e.hurt = t;
+    return;
+  }
+  const at = enemyPos(e, t);
+  world.pops.push({ x: at.x, y: at.y, kind: e.kind, t });
+  world.score += e.kind === 0 ? (attacking(e) ? 400 : 150) : attacking(e) ? 200 : 100;
+  e.alive = false;
+  world.kills++;
+  world.beams = world.beams.filter((b) => b.owner !== e.id); // a dead Cyclops's beam goes out
+  if (e.carries) world.pickups.push({ weapon: e.carries, x: clamp(Math.round(at.x), 0, COLS - 1), y: Math.max(0, at.y), landed: null });
+}
+
+function shootMini(world: World, i: number, t: number) {
+  const m = world.minis[i];
+  world.pops.push({ x: m.x, y: m.y, kind: 2, t });
+  world.score += 100;
+  world.kills++;
+  world.minis.splice(i, 1);
+}
+
 export function fire(world: World) {
-  if (!world.alive || world.t < world.ship.reloadUntil || world.shots.length >= MAX_SHOTS) return;
-  world.shots.push({ x: world.ship.x, y: SHIP_ROW - 0.5 });
+  if (!world.alive || world.t < world.ship.reloadUntil) return;
+  const x = world.ship.x;
+  if (world.weapon === "beam") {
+    // Your Eye Beam: everything in your column takes a hit at once.
+    const t = world.t;
+    for (const e of world.enemies) {
+      if (!e.alive) continue;
+      const p = enemyPos(e, t);
+      if (p.y >= 0 && p.y < SHIP_ROW && Math.abs(p.x - x) < 0.5) hitEnemy(world, e, t);
+    }
+    for (let i = world.minis.length - 1; i >= 0; i--) if (Math.abs(world.minis[i].x - x) < 0.5 && world.minis[i].y < SHIP_ROW) shootMini(world, i, t);
+    world.beams.push({ x, from: "ship", owner: -1, warn: t, start: t, end: t + LANCE_SHOW });
+    world.ship.reloadUntil = t + BEAM_RELOAD;
+    return;
+  }
+  if (world.shots.filter((s) => s.lead).length >= MAX_SHOTS) return;
+  const y = SHIP_ROW - 0.5;
+  world.shots.push({ x, y, vx: 0, lead: true });
+  if (world.weapon === "fan") for (const vx of [-PLAYER_FAN, PLAYER_FAN]) world.shots.push({ x, y, vx, lead: false });
+  for (const w of wingmen(world)) world.shots.push({ x: w.x, y, vx: 0, lead: false });
   world.ship.reloadUntil = world.t + RELOAD;
 }
 
@@ -588,7 +764,7 @@ export const gunReadyIn = (world: World) => Math.max(0, world.ship.reloadUntil -
 // bullets, no charged eyes, no dives under way, and nobody flying in who still
 // fires. New launches don't count (see threatOnPath), so the simulation can be skipped.
 function nothingCanHit(world: World): boolean {
-  if (world.bullets.length) return false;
+  if (world.bullets.length || world.minis.length || world.beams.some((b) => b.from === "enemy")) return false;
   return world.enemies.every((e) => {
     if (!e.alive) return true;
     if (e.charge !== null) return false;
@@ -626,14 +802,23 @@ export function movePath(world: World, move: Move): (s: number) => number {
 }
 
 // The lowest enemy above `x` now, and how long a shot fired now takes to reach it.
-export function targetAbove(world: World, x: number): { rowsUp: number; seconds: number; diving: boolean; kind: Kind; hp: number } | null {
-  let best: { y: number; diving: boolean; kind: Kind; hp: number } | null = null;
+// The carrier the next dive will send, once the wave's first dive has gone.
+export function nextCarrier(world: World, pool = world.enemies.filter((e) => e.alive && !e.diving && e.charge === null)): Enemy | undefined {
+  return pool.find((e) => e.carries && !e.dived);
+}
+
+// The lowest enemy (or mini-drone) above `x` now, and how long a shot fired now takes to reach it.
+export function targetAbove(world: World, x: number): { rowsUp: number; seconds: number; diving: boolean; kind: Kind; hp: number; mini: boolean } | null {
+  let best: { y: number; diving: boolean; kind: Kind; hp: number; mini: boolean } | null = null;
   for (const e of world.enemies) {
     if (!e.alive) continue;
     const p = enemyPos(e, world.t);
-    if (Math.abs(p.x - x) < 0.5 && p.y < SHIP_ROW && p.y >= 0 && (!best || p.y > best.y)) best = { y: p.y, diving: attacking(e), kind: e.kind, hp: e.hp };
+    if (Math.abs(p.x - x) < 0.5 && p.y < SHIP_ROW && p.y >= 0 && (!best || p.y > best.y)) best = { y: p.y, diving: attacking(e), kind: e.kind, hp: e.hp, mini: false };
   }
+  for (const m of world.minis)
+    if (Math.abs(m.x - x) < 0.4 && m.y < SHIP_ROW && m.y >= 0 && (!best || m.y > best.y)) best = { y: m.y, diving: true, kind: 2, hp: 1, mini: true };
   if (!best) return null;
   const rowsUp = SHIP_ROW - best.y;
-  return { rowsUp, seconds: (rowsUp - 0.5) / SHOT_SPEED, diving: best.diving, kind: best.kind, hp: best.hp };
+  // a falling mini-drone closes on the shot
+  return { rowsUp, seconds: (rowsUp - 0.5) / (SHOT_SPEED + (best.mini ? DRONE_FALL : 0)), diving: best.diving, kind: best.kind, hp: best.hp, mini: best.mini };
 }

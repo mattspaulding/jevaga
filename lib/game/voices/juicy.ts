@@ -658,6 +658,228 @@ const reject: VoiceFn = (rate) => {
   return finish(out, rate, 0.32);
 };
 
+// ---------- the weapons slice ----------
+
+// Sparse crackle: random clicks at `perSec(u)` a second, high-passed at `hpHz`
+// so they snap like static rather than thump. Seeded, like all the noise.
+function crackle(out: Float32Array, rate: number, at: number, dur: number, seed: number, perSec: (u: number) => number, hpHz: number, gain: number) {
+  const r = rng(seed);
+  const hp = Math.exp((-TAU * hpHz) / rate);
+  let lp = 0;
+  const c0 = Math.round(at * rate);
+  const c1 = Math.min(out.length, c0 + Math.round(dur * rate));
+  for (let i = c0; i < c1; i++) {
+    const u = (i - c0) / (c1 - c0);
+    const c = (r() + 1) / 2 < perSec(u) / rate ? r() : 0;
+    lp = c + hp * (lp - c);
+    out[i] += (c - lp) * gain;
+  }
+}
+
+// A carrier drops its weapon: a flip, then a little bell figure falling down
+// G major (D6 B5 G5 D5, the key grab climbs back up) as it tumbles toward the
+// player's row. The flip waits 50 ms so it lands after the pop's crack
+// instead of under it, and the tumble is only a 16 Hz tremolo on the bells,
+// so the pitch steps down cleanly and never glides like a swoop.
+const drop: VoiceFn = (rate, o) => {
+  const v = vi(o);
+  const p = VP[v];
+  const tt = VT[v];
+  const out = buffer(rate, 0.44);
+  // the flip: two quick rising blips, like something spinning over
+  [0.05, 0.095].forEach((t, i) => {
+    const d = 0.04;
+    osc(out, rate, { at: t * tt, dur: d, w: "tri", f: (s) => exp(900 * p, 2100 * p, s / d) * semis(i * 3), env: ahd(d, 0.002, 0.01, 1.6), gain: 0.55 });
+    osc(out, rate, { at: t * tt, dur: d, w: "pulse", duty: 0.25, f: (s) => exp(900 * p, 2100 * p, s / d) * semis(i * 3), env: ahd(d, 0.002, 0.006, 2), gain: 0.14 });
+  });
+  // the fall: four bells a step apart, each ringing into the next, all under one tumble
+  const at = 0.14 * tt;
+  const step = 0.06 * tt;
+  const tumble = (s: number) => 0.62 + 0.38 * Math.cos(TAU * 16 * s);
+  [86, 83, 79, 74].forEach((m, i) => {
+    const t = at + i * step;
+    const d = i === 3 ? 0.1 : 0.11;
+    const f0 = NOTE(m);
+    const g = 1 - i * 0.08;
+    const env = ahd(d, 0.002, 0.012, 2.2);
+    const tr = (s: number) => env(s) * tumble(t - at + s);
+    osc(out, rate, { at: t, dur: d, w: "sine", f: () => f0, env: tr, gain: 0.5 * g });
+    osc(out, rate, { at: t, dur: d, w: "tri", f: () => f0, env: tr, gain: 0.3 * g });
+  });
+  saturate(out, 1.2);
+  echo(out, rate, 0.07, 0.15, 0.12);
+  return finish(out, rate, 0.22, 0.02);
+};
+
+// The player takes a weapon: a fast power-up run up G major (the drop's
+// bells, climbed back up), each note a narrow pulse that slides up into its
+// pitch, over a triangle sweep rising under the whole run, landing on the root
+// G5 held with vibrato. Quicker and buzzier than the kept chime, which is
+// slower bells.
+const grab: VoiceFn = (rate) => {
+  const out = buffer(rate, 0.56);
+  const notes = [59, 62, 67, 71, 74, 79];
+  const step = 0.036;
+  notes.forEach((m, i) => {
+    const last = i === notes.length - 1;
+    const t = i * step;
+    const d = last ? 0.26 : step * 1.6;
+    const f0 = NOTE(m);
+    const f = (s: number) => f0 * exp(0.94, 1, s / 0.012) * (last && s > 0.06 ? 1 + 0.012 * Math.sin(TAU * 9 * (s - 0.06)) : 1);
+    const env = ahd(d, 0.002, last ? 0.06 : d * 0.4, last ? 1.6 : 1.4);
+    osc(out, rate, { at: t, dur: d, w: "pulse", duty: 0.125, f, env, gain: 0.36 });
+    osc(out, rate, { at: t, dur: d, w: "pulse", duty: 0.5, f: (s) => f(s) * 0.5 * 1.003, env, gain: 0.2 });
+  });
+  // the sweep underneath: a triangle rising two octaves across the run
+  const sd = notes.length * step + 0.06;
+  osc(out, rate, { dur: sd, w: "tri", f: (s, u) => exp(196, 784, u), env: ahd(sd, 0.01, sd * 0.6, 1.5), gain: 0.26 });
+  // a pinch of sparkle on the landing
+  osc(out, rate, { at: 5 * step + 0.02, dur: 0.07, w: "sine", f: () => NOTE(98), env: ahd(0.07, 0.001, 0.01, 2), gain: 0.1 });
+  saturate(out, 1.3);
+  echo(out, rate, 0.08, 0.2, 0.2);
+  // 0.38 rather than 0.36: the lower run has less energy per peak, and this
+  // keeps its loudest 50 ms where the higher run had it
+  return finish(out, rate, 0.38, 0.04);
+};
+
+// A carrier Cyclops lines up its Eye Beam for 0.8 s: a siren. It opens on a
+// bright stab of the alarm itself, so it's already louder than the glow in
+// its first 200 ms. Then two narrow pulses a semitone apart (the clash is
+// what makes it an alarm, where the glow is clean) glide up two octaves
+// together, hopping up a fourth on every other beat of a stutter that speeds
+// from 8 to 30 a second: hi-lo, hi-lo, faster, like a klaxon. A hiss rises
+// with it. Still under the pops.
+const warn: VoiceFn = (rate, o) => {
+  const p = VW[vi(o)];
+  const dur = 0.8;
+  const out = buffer(rate, dur);
+  const env = swell(dur, 0.02, 1.6, 0.3);
+  // stutter phase in cycles: its rate climbs from 8 to 30 Hz as 8 + 22u²
+  const beat = (s: number) => 8 * s + (22 * s * s * s) / (3 * dur * dur);
+  // the hop changes at the bottom of each gate dip, where it's quietest
+  const hop = (s: number) => (Math.floor(beat(s) + 0.25) % 2 === 1 ? semis(5) : 1);
+  const f = (s: number, u: number) => exp(440 * p, 1760 * p, Math.pow(u, 1.25)) * hop(s);
+  const tmp = buffer(rate, dur);
+  osc(tmp, rate, { dur, w: "pulse", duty: 0.25, f, env, gain: 0.5 });
+  osc(tmp, rate, { dur, w: "pulse", duty: 0.25, f: (s, u) => f(s, u) * semis(1), env, gain: 0.35 });
+  osc(tmp, rate, { dur, w: "tri", f: (s, u) => f(s, u) * 0.5, env, gain: 0.35 });
+  noise(tmp, rate, { dur, seed: 91 + vi(o), mode: "bp", fc: (s, u) => exp(1200, 5000, u), q: 1.2, env: (s) => env(s) * (0.3 + 0.7 * s / dur), gain: 0.3 });
+  const n = tmp.length;
+  const lp = svf(rate, "lp", (s, u) => exp(2200, 7000, u), 0.9, n);
+  // the stutter: a rounded gate that speeds up toward the shot
+  const soft = Math.tanh(2.5);
+  for (let i = 0; i < n; i++) out[i] = lp(tmp[i]) * (0.6 + 0.4 * (Math.tanh(2.5 * Math.sin(TAU * beat(i / rate))) / soft));
+  // the stab: the semitone pair, bright and unfiltered, for the first 50 ms
+  const sd = 0.05;
+  osc(out, rate, { dur: sd, w: "pulse", duty: 0.25, f: () => 880 * p, env: ahd(sd, 0.002, 0.012, 1.6), gain: 0.4 });
+  osc(out, rate, { dur: sd, w: "pulse", duty: 0.25, f: () => 880 * p * semis(1), env: ahd(sd, 0.002, 0.012, 1.6), gain: 0.3 });
+  saturate(out, 2.2);
+  return finish(out, rate, 0.42, 0.004);
+};
+
+// The Eye Beam fires down the column for 0.5 s: the second-loudest thing in
+// the game. A crack and a sine slam on the front, then a held column of
+// energy: a low detuned saw drone, a 392 Hz pulse carrying a 60 Hz growl
+// (the part a laptop or phone speaker can still play), a little crushed-noise
+// roar, a band of hiss, and static crackle all over it. The whole column
+// creeps up a semitone and a half as it burns and flickers at two uneven
+// rates so it never sits still. A short release at the end, so it stops when
+// the beam does.
+const beam: VoiceFn = (rate, o) => {
+  const v = vi(o);
+  const dur = 0.5;
+  const out = buffer(rate, dur);
+  const hold = (s: number) => Math.min(1, s / 0.004) * Math.min(1, Math.max(0, (dur - s) / 0.05));
+  // the slam
+  noise(out, rate, { dur: 0.015, seed: 121 + v, mode: "bp", fc: () => 2800, q: 0.7, env: ahd(0.015, 0.0005, 0.003, 1.5), gain: 0.8 });
+  osc(out, rate, { dur: 0.16, w: "sine", f: (s) => exp(170, 45, s / 0.16), env: ahd(0.16, 0.001, 0.02, 1.6), gain: 1.3 });
+  // the column: everything below runs the full 0.5 s
+  const tmp = buffer(rate, dur);
+  const f = (s: number) => 98 * semis(1.5 * (s / dur));
+  osc(tmp, rate, { dur, w: "saw", f, env: hold, gain: 0.55 });
+  osc(tmp, rate, { dur, w: "saw", f: (s) => f(s) * 1.012, env: hold, gain: 0.45 });
+  osc(tmp, rate, { dur, w: "pulse", duty: 0.3, f: (s) => f(s) * 2.005, env: hold, gain: 0.3 });
+  osc(tmp, rate, { dur, w: "pulse", duty: 0.25, f: (s) => f(s) * 4.02 * (1 + 0.06 * Math.sin(TAU * 60 * s)) * (1 + 0.01 * Math.sin(TAU * 7 * s)), env: hold, gain: 0.45 });
+  noise(tmp, rate, { dur, seed: 131 + v, mode: "lp", fc: () => 2600, q: 1, env: hold, gain: 0.3, crush: 7 });
+  noise(tmp, rate, { dur, seed: 141 + v, mode: "bp", fc: (s) => 3200 * (1 + 0.25 * Math.sin(TAU * 11 * s)), q: 1.4, env: hold, gain: 0.35 });
+  crackle(tmp, rate, 0, dur - 0.03, 151 + v, () => 140, 3000, 1.8);
+  let a = 0;
+  let b = 0;
+  for (let i = 0; i < tmp.length; i++) {
+    a += 23 / rate;
+    b += 37 / rate;
+    out[i] += tmp[i] * (0.8 + 0.12 * Math.sin(TAU * a) + 0.08 * Math.sin(TAU * b));
+  }
+  saturate(out, 2.2);
+  return finish(out, rate, 0.62, 0.012);
+};
+
+// The player's Eye Beam: the enemy's beam, pointed up and cut short. A crack
+// of air, then two detuned saws that zip up an octave and a half in 30 ms
+// and ring only briefly there, with a 70 ms slice of the enemy beam's own
+// hiss (the 3.2 kHz band with its 11 Hz wobble) and static crackle over
+// them, a sine an octave above for glint, and a small sine thump so it lands
+// with some weight. It rises where the shot falls, and it's softer than a pop
+// because it repeats.
+const lance: VoiceFn = (rate, o) => {
+  const v = vi(o);
+  const p = VP[v];
+  const dur = 0.22 * VT[v];
+  const out = buffer(rate, dur + 0.03);
+  noise(out, rate, { dur: 0.014, seed: 161 + v, mode: "hp", fc: () => 3500, q: 0.7, env: ahd(0.014, 0.0005, 0.002, 2), gain: 0.35 });
+  const f = (s: number) => (s < 0.03 ? exp(700 * p, 2000 * p, s / 0.03) : 2000 * p * (1 - 0.08 * Math.min(1, (s - 0.03) / dur))) * (1 + 0.012 * Math.sin(TAU * 45 * s));
+  osc(out, rate, { dur, w: "saw", f, env: ahd(dur, 0.002, 0.015, 3), gain: 0.3 });
+  osc(out, rate, { dur, w: "saw", f: (s) => f(s) * 1.012, env: ahd(dur, 0.002, 0.015, 3), gain: 0.3 });
+  osc(out, rate, { dur, w: "tri", f: (s) => f(s) * 0.5, env: ahd(dur, 0.002, 0.015, 3), gain: 0.5 });
+  osc(out, rate, { dur: dur * 0.7, w: "sine", f: (s) => f(s) * 2.006, env: ahd(dur * 0.7, 0.004, 0.02, 2.2), gain: 0.18 });
+  osc(out, rate, { dur: 0.06, w: "sine", f: (s) => exp(320 * p, 110, s / 0.06), env: ahd(0.06, 0.001, 0.01, 2), gain: 0.4 });
+  // the slice of beam: its wobbling hiss band and its crackle
+  const bd = 0.07 * VT[v];
+  noise(out, rate, { at: 0.004, dur: bd, seed: 141 + v, mode: "bp", fc: (s) => 3200 * p * (1 + 0.25 * Math.sin(TAU * 11 * s)), q: 1.4, env: ahd(bd, 0.003, 0.02, 1.5), gain: 0.45 });
+  crackle(out, rate, 0.004, bd, 191 + v, (u) => 300 * (1 - u), 3000, 0.5);
+  saturate(out, 1.4);
+  room(out, rate, 0.25);
+  return finish(out, rate, 0.27, 0.01);
+};
+
+// A Wingman is destroyed: the tink's bigger cousin. A lower struck-plate ring
+// (inharmonic partials off 820 Hz, bending down a touch as the metal gives),
+// a crushed-noise crunch and a sine knock under it, then a few falling glass
+// glints scattering out after, and a quiet two-note blink falling a minor
+// third, so the player hears that something was lost and not only that armor
+// broke.
+const shield: VoiceFn = (rate, o) => {
+  const v = vi(o);
+  const p = VP[v];
+  const dur = 0.33 * VT[v];
+  const out = buffer(rate, dur + 0.04);
+  noise(out, rate, { dur: 0.01, seed: 171 + v, mode: "bp", fc: () => 3000, q: 0.8, env: ahd(0.01, 0.0005, 0.002, 1.5), gain: 0.6 });
+  noise(out, rate, { dur: 0.16, seed: 181 + v, mode: "lp", fc: (s, u) => exp(5000 * p, 500 * p, Math.pow(u, 0.6)), q: 1.1, env: ahd(0.16, 0.001, 0.012, 1.8), gain: 1.2, crush: 4 });
+  osc(out, rate, { dur: 0.1, w: "sine", f: (s) => exp(160 * p, 50, s / 0.1), env: ahd(0.1, 0.001, 0.012, 1.6), gain: 0.9 });
+  const f0 = 820 * p;
+  const partials: [number, number, number][] = [
+    [1, 1, 0.3],
+    [1.5, 0.45, 0.24],
+    [2.76, 0.6, 0.2],
+    [3.9, 0.3, 0.15],
+    [5.4, 0.35, 0.12],
+  ];
+  for (const [m, g, d] of partials) osc(out, rate, { dur: d, w: "sine", f: (s) => f0 * m * (1 - 0.03 * (s / d)), env: ahd(d, 0.0008, 0.008, 2), gain: g * 0.5 });
+  const glints: [number, number][] = [
+    [0.06, 3520],
+    [0.1, 2960],
+    [0.15, 4186],
+    [0.21, 3136],
+  ];
+  for (const [t, g0] of glints) osc(out, rate, { at: t * VT[v], dur: 0.05, w: "sine", f: (s) => g0 * p * (1 - 1.2 * s), env: ahd(0.05, 0.001, 0.006, 2), gain: 0.24 });
+  // the loss: a quiet two-note blink falling a minor third, the tink's "shut" a step lower
+  osc(out, rate, { at: 0.08 * VT[v], dur: 0.045, w: "pulse", duty: 0.25, f: () => 880 * p, env: ahd(0.045, 0.002, 0.015, 1.5), gain: 0.14 });
+  osc(out, rate, { at: 0.13 * VT[v], dur: 0.06, w: "pulse", duty: 0.25, f: () => 740 * p, env: ahd(0.06, 0.002, 0.018, 1.5), gain: 0.14 });
+  saturate(out, 1.8);
+  room(out, rate, 0.3);
+  return finish(out, rate, 0.42, 0.015);
+};
+
 const voices: Record<SoundName, VoiceFn> = {
   start,
   wave: waveJingle,
@@ -676,6 +898,12 @@ const voices: Record<SoundName, VoiceFn> = {
   rewind,
   kept,
   reject,
+  drop,
+  grab,
+  warn,
+  beam,
+  lance,
+  shield,
 };
 
 const set: VoiceSet = {
