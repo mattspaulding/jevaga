@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import GameCanvas from "@/components/GameCanvas";
+import Library from "@/components/Library";
 import {
   CoachBox,
   Controls,
@@ -94,6 +95,13 @@ export default function Game() {
   const [bannerTone, setBannerTone] = useState<"hit" | "good">("hit");
   const [replaying, setReplaying] = useState(false);
   const replayingRef = useRef(false);
+  // The Enemy Library, over the page. While it's open, the arrow keys turn its pages instead of steering.
+  const [libraryOpen, setLibraryOpen] = useState(false);
+  const libraryRef = useRef(false);
+  useEffect(() => {
+    libraryRef.current = libraryOpen;
+  }, [libraryOpen]);
+  const closeLibrary = useCallback(() => setLibraryOpen(false), []);
   // Sound starts on unless it was muted before in this browser (the game only renders in the browser, so this can read storage).
   const [soundOn, setSoundOn] = useState(() => !sound.isMuted());
   useEffect(() => {
@@ -147,7 +155,7 @@ export default function Game() {
       runRef.current?.steer(dir);
     };
     const onDown = (e: KeyboardEvent) => {
-      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.metaKey || e.ctrlKey || e.altKey || libraryRef.current) return;
       const move = KEYS[e.key] ?? KEYS[e.key.toLowerCase()];
       if (!move) return;
       e.preventDefault();
@@ -418,8 +426,10 @@ export default function Game() {
           canForget={book.rules.length > 0 || book.deaths.length > 0}
           soundOn={soundOn}
           onSound={toggleSound}
+          onLibrary={() => setLibraryOpen(true)}
         />
       </aside>
+      {libraryOpen && <Library onClose={closeLibrary} />}
     </main>
   );
 }

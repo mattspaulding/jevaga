@@ -92,7 +92,7 @@ Source: `enemy-design.md`, which has every number.
 
 ### Enemy Library
 - A LIBRARY screen has one page per enemy: its sprites, name, a little lore, how it attacks, its weapon, how to spot it coming, and the wave it first appears. The copy is in `enemy-design.md`.
-- [ ] Every enemy in the game has a library page, reachable from the panel.
+- [x] Every enemy in the game has a library page, reachable from the panel.
 
 ### You fly
 - ← → or A D glide the ship; Space fires. Same rules and speed as Jev.

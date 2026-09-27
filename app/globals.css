@@ -831,3 +831,87 @@ body {
   gap: 16px;
   align-items: center;
 }
+
+/* ---------- the Enemy Library ---------- */
+
+.libBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(8, 8, 15, 0.8);
+}
+.library {
+  background: #2a2a46; /* one band of the neutral window: stripes would cut through the text of a tall page */
+  width: min(720px, 100%);
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
+}
+.libHead {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.libClose {
+  height: 36px;
+  padding: 0 14px;
+  font-size: 14px;
+}
+.libTabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 10px 0 14px;
+}
+.libTab {
+  font: 700 14px var(--font-pixel);
+  color: var(--muted);
+  background: var(--btn);
+  border: 3px solid var(--muted);
+  border-radius: 4px;
+  padding: 6px 12px;
+  cursor: pointer;
+}
+.libTab.active {
+  color: var(--gold);
+  border-color: var(--gold);
+}
+.libPortrait {
+  display: block;
+  max-width: 100%;
+  height: auto !important;
+  image-rendering: pixelated;
+  border: 3px solid var(--ground);
+  border-radius: 4px;
+}
+.libName {
+  margin: 12px 0 0;
+  font-size: 28px;
+  color: var(--gold);
+}
+.libSpecies {
+  margin: 0 0 10px;
+  color: var(--muted);
+  text-transform: uppercase;
+  font-size: 13px;
+}
+.libLore {
+  font-style: italic;
+}
+.libPage h4 {
+  margin: 14px 0 4px;
+  color: var(--jev-hi);
+  text-transform: uppercase;
+  font-size: 14px;
+}
+.libPage p {
+  margin: 0;
+}
+.libHint {
+  margin: 14px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+}

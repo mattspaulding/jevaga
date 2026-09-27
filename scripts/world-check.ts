@@ -2,7 +2,9 @@
 // Run: pnpm world-check
 import { describe, describeFight, describeMoves } from "../lib/describe";
 import { bulletsAt, debrisAt, enemyAt, flashAt, shakeAt, startAftermath } from "../lib/game/aftermath";
+import { readFileSync } from "node:fs";
 import { createCueTracker, type Cue } from "../lib/game/cues";
+import { LIBRARY } from "../lib/library";
 import { LETTERS, SPRITES } from "../lib/game/sprites";
 import { createRecorder, type Death } from "../lib/learn/recorder";
 import { playback, replay } from "../lib/learn/replay";
@@ -964,6 +966,17 @@ function immortal(w: World) {
   check(`the dance stays within half a cell of each slot (at most ${wander.toFixed(2)})`, wander <= 0.5);
   check("the flash, the shake and the pieces are over within 1.6 s", flashAt(0.2) === 0 && shakeAt(0.8).x === 0 && shakeAt(0.8).y === 0 && debrisAt(a, 1.6).length === 0 && debrisAt(a, 0.1).length > 10);
   check("bullets in the air keep falling off the screen", bulletsAt(a, 3).length === 0);
+}
+
+// The Enemy Library: a page for every enemy in the game, saying what the design doc says, with no em dashes.
+{
+  const doc = readFileSync(new URL("../devpost/enemy-design.md", import.meta.url), "utf8");
+  const kinds = new Set(LIBRARY.map((p) => p.kind));
+  const texts = LIBRARY.flatMap((p) => [p.lore, p.attack, p.weapon.text, p.spot, p.firstSeen]);
+  const missing = texts.filter((t) => !doc.includes(t));
+  check(`the library has a page for each of the ${kinds.size} kinds of enemy`, kinds.size === 3 && LIBRARY.length === 3);
+  check(`every library paragraph is word for word in enemy-design.md (${missing.length} differ)`, missing.length === 0);
+  check("no em dashes in the library", !texts.some((t) => t.includes("\u2014")));
 }
 
 // The sprite grids copied from the design canvas are well formed.

@@ -157,7 +157,7 @@ const ICONS: Record<Weapon, string[]> = {
   wingmen: ["M...M", "MM.MM", ".MMM.", "..M..", "....."],
 };
 const ICON_COLORS: Record<string, string> = { O: "#ffb347", W: "#f2f0e6", K: "#1b1b28", R: "#e8423a", M: "#b8c0e0" };
-function icon(ctx: CanvasRenderingContext2D, weapon: Weapon, cx: number, cy: number, scale = 1) {
+export function drawWeaponIcon(ctx: CanvasRenderingContext2D, weapon: Weapon, cx: number, cy: number, scale = 1) {
   const rows = ICONS[weapon];
   const x0 = Math.round(cx - (5 * scale) / 2);
   const y0 = Math.round(cy - (5 * scale) / 2);
@@ -316,7 +316,7 @@ export function render(ctx: CanvasRenderingContext2D, world: World, view: View) 
     if (e.carries) {
       // a carrier's weapon glows over it, in the empty strip above its sprite
       ctx.globalAlpha = 0.65 + 0.35 * Math.sin(t * 8);
-      icon(ctx, e.carries, px(p.x), px(p.y) - 8);
+      drawWeaponIcon(ctx, e.carries, px(p.x), px(p.y) - 8);
       ctx.globalAlpha = 1;
     }
   }
@@ -337,8 +337,8 @@ export function render(ctx: CanvasRenderingContext2D, world: World, view: View) 
       ctx.fillRect(Math.round(cx - 7), Math.round(cy - 7), 14, 14);
       ctx.fillStyle = "#0b0d1c";
       ctx.fillRect(Math.round(cx - 6), Math.round(cy - 6), 12, 12);
-      if (p.landed !== null || Math.floor(t / 0.12) % 2 === 0) icon(ctx, p.weapon, cx, cy, 2);
-      else icon(ctx, p.weapon, cx, cy, 1);
+      if (p.landed !== null || Math.floor(t / 0.12) % 2 === 0) drawWeaponIcon(ctx, p.weapon, cx, cy, 2);
+      else drawWeaponIcon(ctx, p.weapon, cx, cy, 1);
     }
     beams(ctx, world, t, BODY[view.who]);
   }

@@ -159,6 +159,7 @@ export function Controls({
   canForget = false,
   soundOn,
   onSound,
+  onLibrary,
 }: {
   status: Status;
   onStart: () => void;
@@ -167,6 +168,7 @@ export function Controls({
   canForget?: boolean; // anything learned to forget
   soundOn: boolean;
   onSound: () => void;
+  onLibrary: () => void;
 }) {
   const busy = status === "running" || status === "starting" || status === "retrying" || status === "between";
   return (
@@ -182,7 +184,10 @@ export function Controls({
           FORGET RULES
         </button>
       )}
-      <button className="btn btnQuiet" onClick={onSound} aria-pressed={soundOn} title="Sound on or off (M)">
+      <button className="btn btnQuiet" onClick={onLibrary} title="Meet the enemies">
+        LIBRARY
+      </button>
+      <button className="btn" onClick={onSound} aria-pressed={soundOn} title="Sound on or off (M)">
         SOUND {soundOn ? "ON" : "OFF"}
       </button>
     </div>
