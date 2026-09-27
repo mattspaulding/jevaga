@@ -13,6 +13,8 @@ import {
   batZigX,
   arriving,
   BEAM_WARN,
+  swarming,
+  waveRules,
   COMMIT_ROW,
   DECISION_SECONDS,
   drift,
@@ -61,6 +63,12 @@ function quiet(seed = 1): World {
   for (const e of w.enemies) e.diving = null;
   return w;
 }
+// Something already overlapping the ship (left over from keeping it alive): no fair comparison.
+const shipTouching = (w: World) => {
+  const v = structuredClone(w);
+  v.nextDive = v.nextVolley = 1e9;
+  return stepN(v, 1) === "hit";
+};
 // Keeps a fight going after a hit, so a check can watch a long stretch of it.
 function immortal(w: World) {
   if (w.alive) return;
@@ -338,6 +346,138 @@ function immortal(w: World) {
   stepN(v, 1);
   const heard = cues.update(v).map((c) => c.name);
   check(`swapping Wingmen for another weapon sounds like a grab, not a wingman lost (${heard.join(", ")})`, heard.includes("grab") && !heard.includes("shield"));
+}
+
+// Waves escalate (enemy-design.md, section 4).
+{
+  const rows = Array.from({ length: 12 }, (_, i) => waveRules(i + 1));
+  check(
+    `speed by wave ${rows.map((r) => r.speed.toFixed(2)).join(" ")}, at once ${rows.map((r) => r.atOnce).join("")}`,
+    JSON.stringify(rows.map((r) => +r.speed.toFixed(2))) === JSON.stringify([1, 1, 1.05, 1.1, 1.1, 1.15, 1.2, 1.25, 1.3, 1.35, 1.4, 1.4]) &&
+      rows.map((r) => r.atOnce).join("") === "111222223333",
+  );
+  // a wave-n world: clear waves by hand, formation settled, nothing scheduled
+  const at = (wave: number, seed = 1) => {
+    const w = newWorld(seed);
+    while (w.wave < wave) {
+      for (const e of w.enemies) e.alive = false;
+      stepN(w, 1);
+    }
+    w.nextDive = w.nextVolley = 1e9;
+    for (const e of w.enemies) e.diving = null;
+    return w;
+  };
+  const kinds2 = new Set<Kind>();
+  const w2 = at(2, 4);
+  w2.nextDive = w2.t + 1;
+  for (let i = 0; i < 120 / 0.02; i++) {
+    stepN(w2, 1);
+    immortal(w2);
+    for (const e of w2.enemies) if (e.diving && ["rev", "flap", "open"].includes(e.diving.phase)) kinds2.add(e.kind);
+  }
+  check(`from wave 2 all three kinds dive (${[...kinds2].sort().join(", ")})`, kinds2.size === 3);
+  // speed: a wave-11 Drone falls 1.4x faster, but a Bat's last leg after it commits still takes a full second
+  const fast = at(11);
+  const d = find(fast, 2, 3);
+  startDive(fast, d);
+  until(fast, () => d.diving?.phase === "fall");
+  const y0 = d.diving!.y;
+  stepN(fast, 10);
+  check("a wave-11 Drone falls at 1.4x speed", near((d.diving!.y - y0) / 0.2, 4.5 * 1.4, 0.01));
+  const b = find(fast, 1, 4);
+  fast.ship.x = 7;
+  startDive(fast, b);
+  until(fast, () => b.diving?.phase === "commit");
+  const committed = fast.t;
+  until(fast, () => (b.diving?.y ?? 0) >= SHIP_ROW - 0.6, 3);
+  check(`a Bat's commit still gives at least 0.8 s at wave 11 (${(fast.t - committed).toFixed(2)} s)`, fast.t - committed >= 0.8);
+  // at once: no dive launches once the wave's limit is taken (escorts ride along until they break away)
+  for (const [wave, want] of [[3, 1], [4, 2], [9, 3]] as const) {
+    let violations = 0;
+    let most = 0;
+    let launches = 0;
+    for (const seed of [7, 8, 9]) {
+      const w = at(wave, seed);
+      w.nextDive = w.t + 0.5;
+      const counted = () => w.enemies.filter((e) => e.alive && e.diving && !["home", "enter", "settle", "escort"].includes(e.diving.phase) && e.diving.lead < 0).length;
+      let before = counted();
+      for (let i = 0; i < 60 / 0.02; i++) {
+        const limit = waveRules(w.wave).atOnce + (swarming(w) ? 1 : 0);
+        stepN(w, 1);
+        immortal(w);
+        if (w.wave !== wave) break;
+        const fresh = w.enemies.filter((e) => e.diving && ["rev", "flap", "open"].includes(e.diving.phase) && near(e.diving.since, w.t, 1e-9) && !e.diving.anchor).length;
+        if (fresh) {
+          launches++;
+          if (before + fresh > limit) violations++;
+        }
+        before = counted();
+        most = Math.max(most, before);
+      }
+    }
+    check(`wave ${wave}: dives launch only while fewer than ${want} are under way (${launches} launches, ${violations} over the limit, up to ${most} out with ex-escorts)`, violations === 0 && launches > 10 && most >= want);
+  }
+  // escorts
+  const w3 = at(3);
+  w3.ship.x = 2;
+  const c = find(w3, 0, 4);
+  startDive(w3, c);
+  const escorts = w3.enemies.filter((e) => e.diving?.phase === "escort");
+  check(`from wave 3 a diving Cyclops takes the two Bats beside it (${escorts.map((e) => e.slot.col).join(", ")})`, escorts.length === 2 && escorts.every((e) => e.kind === 1 && Math.abs(e.slot.col - 4) === 1));
+  stepN(w3, 50);
+  const cp = enemyPos(c, w3.t);
+  check("they keep station a column out and a row behind", escorts.every((e) => near(Math.abs(e.diving!.x - cp.x), 1, 0.35) && near(e.diving!.y, cp.y - 1, 0.35)));
+  until(w3, () => c.diving?.phase === "park");
+  stepN(w3, 1);
+  check("when it parks, they zigzag down on their own", escorts.every((e) => e.diving?.phase === "zig"));
+  const k = at(3);
+  const c2 = find(k, 0, 4);
+  startDive(k, c2);
+  until(k, () => c2.diving?.phase === "slide" && c2.diving.y > 3); // clear of the formation, escorts still with it
+  c2.hp = 1;
+  const p2 = enemyPos(c2, k.t);
+  k.shots.push({ x: p2.x, y: p2.y + 0.3, vx: 0, lead: true });
+  stepN(k, 1);
+  check(`shooting an escorted Cyclops pays double (${k.score})`, !c2.alive && k.score === 800);
+  // mirrored Drone pairs and the second pass, wave 4
+  const w4 = at(4);
+  for (const e of w4.enemies) if (e.kind !== 2) e.alive = false;
+  w4.ship.x = 2;
+  w4.nextDive = w4.t;
+  stepN(w4, 1);
+  const pair = w4.enemies.filter((e) => e.diving?.phase === "rev").map((e) => e.diving!.col).sort();
+  check(`from wave 4 Drones dive in mirrored pairs (columns ${pair.join(" and ")})`, JSON.stringify(pair) === "[2,6]");
+  w4.nextDive = 1e9;
+  const one = w4.enemies.find((e) => e.diving?.col === 2)!;
+  w4.ship.x = 4;
+  let falls = 0;
+  let prevY = 0;
+  const hit4 = until(w4, () => {
+    const y = one.diving?.y ?? 0;
+    if (one.diving?.phase === "fall" && prevY < SHIP_ROW && y >= SHIP_ROW) falls++; // passing the ship's row
+    prevY = y;
+    return one.diving?.phase === "home";
+  }, 12);
+  check(`a wave-4 Drone that misses comes back down its column once more, then goes home (${falls} falls)`, hit4 === null && falls === 2 && one.diving?.col === 2);
+  // the swarm
+  const sw = at(2);
+  const keep = [find(sw, 1, 3), find(sw, 2, 5), find(sw, 2, 6), find(sw, 0, 2)];
+  for (const e of sw.enemies) if (!keep.includes(e)) e.alive = false;
+  sw.ship.x = 7;
+  const bat = keep[0];
+  startDive(sw, bat);
+  sw.ship.x = 0; // it commits to x 0 and misses a ship that moves away
+  until(sw, () => bat.diving?.phase === "commit");
+  sw.ship.x = 5;
+  until(sw, () => bat.diving?.phase === "wrap", 5);
+  check("in the swarm a diver that misses doesn't go home: it waits above the screen", bat.diving?.phase === "wrap");
+  sw.ship.x = 7;
+  const wrapped = sw.t;
+  until(sw, () => bat.diving?.phase === "flap", 1);
+  check(
+    `and dives again ${(sw.t - wrapped).toFixed(2)} s later from the top, toward where the ship is now (first zig ${bat.diving?.dir})`,
+    bat.diving?.phase === "flap" && bat.diving.y === 0 && bat.diving.dir === 1 && near(sw.t - wrapped, 0.5, 0.03),
+  );
 }
 
 // A Cyclops takes two hits.
@@ -648,14 +788,14 @@ function immortal(w: World) {
   check(`every Cyclops shot is aimed at the ship and comes after 0.8 s of eye glow (${aimedRight}, ${glowedFirst} of ${from[0]})`, aimedRight === from[0] && glowedFirst === from[0]);
 }
 
-// One attack at a time, and every kind takes a turn.
+// One attack at a time in wave 1, where the Cyclopes stay in the formation.
 {
   const w = newWorld(4);
   let most = 0;
   const kinds = new Set<Kind>();
   for (let i = 0; i < 90 / 0.02; i++) {
     stepN(w, 1);
-    for (const e of w.enemies) if (e.diving && e.diving.phase !== "home") kinds.add(e.kind);
+    for (const e of w.enemies) if (e.diving && !["home", "enter", "settle"].includes(e.diving.phase)) kinds.add(e.kind);
     most = Math.max(most, attacking(w));
     if (!w.alive) {
       w.alive = true;
@@ -664,7 +804,7 @@ function immortal(w: World) {
     }
   }
   check(`never more than one attack at once in wave 1 (most: ${most})`, most === 1);
-  check("Drones, Bats and Cyclopes all dive", kinds.size === 3);
+  check(`in wave 1 Drones and Bats dive and Cyclopes don't (${[...kinds].sort().join(", ")})`, kinds.size === 2 && !kinds.has(0));
 }
 
 // A glide is judged by what it passes under, not only where it ends.
@@ -696,6 +836,36 @@ function immortal(w: World) {
     if ((predicted === null) === (e === null) && (!predicted || (near(predicted.at, copy.t - w.t, 1e-6) && predicted.by === copy.hitBy?.by))) agree++;
   }
   check(`threatAt matches the simulation on ${agree}/${total} fights, naming what hits (${[...names].join(", ")})`, agree === total && total > 40 && names.size >= 3);
+}
+
+// ...and in the harder waves: escorts, mirrored pairs, second passes, carriers and the swarm.
+{
+  let agree = 0;
+  let total = 0;
+  const names = new Set<string>();
+  for (const wave of [3, 4, 9])
+    for (let seed = 1; seed <= 25; seed++) {
+      const w = newWorld(seed);
+      while (w.wave < wave) {
+        for (const e of w.enemies) e.alive = false;
+        stepN(w, 1);
+      }
+      if (seed % 3 === 0) for (const e of w.enemies.slice(0, 17)) e.alive = false; // some in the swarm
+      w.ship.x = seed % 9;
+      for (let i = 0; i < (9 + (seed % 7) * 1.5) / 0.02; i++) {
+        stepN(w, 1);
+        immortal(w); // a parked ship dies fast in these waves; keep it going until the comparison
+      }
+      if (shipTouching(w)) continue;
+      const predicted = threatAt(w, w.ship.x, 2.5);
+      const copy = structuredClone(w);
+      copy.nextDive = copy.nextVolley = 1e9;
+      const e = advance(copy, 2.5);
+      total++;
+      if (predicted) names.add(predicted.by);
+      if ((predicted === null) === (e === null) && (!predicted || (near(predicted.at, copy.t - w.t, 1e-6) && predicted.by === copy.hitBy?.by))) agree++;
+    }
+  check(`threatAt matches the simulation in waves 3, 4 and 9 on ${agree}/${total} fights (${[...names].join(", ")})`, agree === total && total > 30);
 }
 
 // Same seed, same fight.
@@ -738,12 +908,12 @@ function immortal(w: World) {
   let wounded = 0;
   let waves = 1;
   for (let i = 0; i < 120 / 0.02; i++) {
+    const hp = new Map(w.enemies.map((e) => [e.id, e.hp])); // before firing: an Eye Beam wounds the moment it fires
     if (i % 14 === 0) {
       const before = w.ship.reloadUntil;
       act(w, (["fire", "left", "fire", "right", "fire", "stay"] as const)[(i / 14) % 6]);
       if (w.ship.reloadUntil !== before) fired++;
     }
-    const hp = new Map(w.enemies.map((e) => [e.id, e.hp]));
     const wave = w.wave;
     stepN(w, 1);
     if (w.wave !== wave) waves++;

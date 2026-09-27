@@ -24,7 +24,9 @@ import {
   BEAM_WARN,
   KIND_NAME,
   PICKUP_STAYS,
+  swarming,
   WEAPON_NAME,
+  waveRules,
   landingX,
   movePath,
   restX,
@@ -87,6 +89,19 @@ function inColumn(world: World, x: number): string {
   });
   const names = [...hit.map((e) => KIND_NAME[e.kind] as string), ...world.minis.filter((m) => Math.abs(m.x - x) < 0.5 && m.y < SHIP_ROW).map(() => "mini-drone")];
   return names.length ? `hits ${names.length === 1 ? "the" : `all ${names.length}:`} ${names.join(", ")} above you at once` : "no enemy above";
+}
+
+// How hard this wave is, and the swarm when it's down to its last few.
+function waveLine(world: World): string {
+  const r = waveRules(world.wave);
+  const parts = [`dives at ${r.speed.toFixed(2)}x speed`, `up to ${r.atOnce + (swarming(world) ? 1 : 0)} at once`];
+  if (!r.cyclopsDive) parts.push("the Cyclopes stay in the formation");
+  if (r.escorts) parts.push("a Cyclops leaving the formation takes up to two Bats from the formation with it");
+  if (r.pairs) parts.push("Drones dive in mirrored pairs and a Drone that misses comes back down its column once more");
+  const swarm = swarming(world)
+    ? ` Swarm: ${world.enemies.filter((e) => e.alive).length} left, nobody goes back to the formation; a diver that misses${r.secondPass ? " (a Drone after its second pass)" : ""} waits 0.5 s above the screen, then dives again from the top.`
+    : "";
+  return `Wave ${world.wave}: ${parts.join(", ")}.${swarm}`;
 }
 
 // Your answer lands about a quarter-second after you're asked, so a glide
@@ -159,15 +174,17 @@ function diveLine(world: World, e: Enemy): string | null {
     case "rev": {
       const start = DRONE_REV - age;
       const slideFrom = e.slot.col + drift(d.since + DRONE_REV); // the formation keeps drifting while it revs
-      const reach = start + Math.abs(slideFrom - d.col) / DRONE_SLIDE + toHit(d.y) / DRONE_FALL;
+      const reach = start + Math.abs(slideFrom - d.col) / (DRONE_SLIDE * d.speed) + toHit(d.y) / (DRONE_FALL * d.speed);
       return `a ${e.carries ? "carrier " : ""}Drone revving in the formation, locked on ${col}: in ${s1(start)} it moves over and falls straight down ${col}${minis(e)}, reaching your row in ${s1(reach)}. Drones never turn or shoot`;
     }
     case "slide":
       if (e.kind === 2)
-        return `a ${e.carries ? "carrier " : ""}Drone moving over to ${col}, then falling straight down it${minis(e)}, reaching your row in ${s1(Math.abs(d.x - d.col) / DRONE_SLIDE + toHit(d.y) / DRONE_FALL)}`;
+        return `a ${e.carries ? "carrier " : ""}Drone moving over to ${col}, then falling straight down it${minis(e)}, reaching your row in ${s1(Math.abs(d.x - d.col) / (DRONE_SLIDE * d.speed) + toHit(d.y) / (DRONE_FALL * d.speed))}`;
       return `a ${e.carries ? "carrier " : ""}Cyclops at ${at(d.x)} heading to park over ${col}, ${rowsUp(HOVER_ROW)}; there ${parkPlan(e, col)}, and then drops straight down ${col}`;
     case "fall":
-      return `a Drone falling straight down ${col}, ${rowsUp(d.y)}, never turns, reaching your row in ${s1(toHit(d.y) / DRONE_FALL)}`;
+      return d.y < 0
+        ? `a Drone that missed, coming back down ${col} from the top, reaching your row in ${s1(toHit(d.y) / (DRONE_FALL * d.speed))}`
+        : `a Drone falling straight down ${col}, ${rowsUp(d.y)}, never turns, reaching your row in ${s1(toHit(d.y) / (DRONE_FALL * d.speed))}${d.passes > 0 ? `; if it misses it comes back down ${col} once more` : ""}`;
     case "flap":
     case "zig": {
       const commit = d.phase === "zig" ? batCommitAge(d) - age : BAT_FLAP - age + batCommitAge(d);
@@ -189,7 +206,13 @@ function diveLine(world: World, e: Enemy): string | null {
       return `a Cyclops parked over ${col}, ${rowsUp(d.y)}, eye glowing: it shoots at where you are then in ${s1(Math.max(0, next))}${d.fired === 0 ? ", and again 0.8 s later" : ""}, then drops straight down ${col}`;
     }
     case "drop":
-      return `a Cyclops dropping straight down ${col}, ${rowsUp(d.y)}, reaching your row in ${s1(toHit(d.y) / CY_DROP)}`;
+      return `a Cyclops dropping straight down ${col}, ${rowsUp(d.y)}, reaching your row in ${s1(toHit(d.y) / (CY_DROP * d.speed))}`;
+    case "escort": {
+      const lead = world.enemies.find((o) => o.id === d.lead);
+      return `a Bat escorting the Cyclops ${lead ? `at ${at(enemyPos(lead, world.t).x)}` : ""} a column to its ${d.dir < 0 ? "left" : "right"}; when the Cyclops parks it zigzags down on its own and turns toward you at row ${COMMIT_ROW}`;
+    }
+    case "wrap":
+      return `a ${KIND_NAME[e.kind]} that missed, above the screen at ${at(d.x)}, diving again in ${s1(Math.max(0, 0.5 - age))} (the swarm: nobody goes home)`;
     case "home":
     case "enter":
     case "settle":
@@ -255,7 +278,7 @@ export function describeFight(world: World, memo: Memo = new Map()): string {
   lines.push(dives.length ? `Diving: ${dives.join("; ")}.` : "Diving: none right now.");
   if (world.minis.length)
     lines.push(
-      `Mini-drones: ${world.minis.map((m) => `one falling straight down ${at(m.x)}, reaching your row in ${s1(toHit(m.y) / DRONE_FALL)}`).join("; ")}.`,
+      `Mini-drones: ${world.minis.map((m) => `one falling straight down ${at(m.x)}, reaching your row in ${s1(toHit(m.y) / m.vy)}`).join("; ")}.`,
     );
   const weapons = weaponsLine(world);
   if (weapons) lines.push(weapons);
@@ -272,6 +295,7 @@ export function describeFight(world: World, memo: Memo = new Map()): string {
   const aimed = world.bullets.length - bats;
   lines.push(
     `Formation: ${left} enemies left, Cyclopes on row 1, Bats row 2, Drones row 3, drifting ${heading} (offset ${drift(world.t).toFixed(1)}). Bullets on screen: ${bats} Bat bullets falling straight down, ${aimed} Cyclops shots flying straight at where you were. Score ${world.score}, wave ${world.wave}.`,
+    waveLine(world),
   );
   return lines.join("\n");
 }

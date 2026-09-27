@@ -86,7 +86,25 @@ export const WING_OFFSET = 1; // your Wingmen fly a column either side of the sh
 const WING_HALF = 0.3; // a wingman is half a Drone: this is half its width
 const MINI_REACH = 0.5; // a carrier Drone's mini-drones are smaller than a Drone
 const DIVE_WEIGHT = [1, 2, 3]; // Cyclops, Bat, Drone: Drones dive most often
-const AT_ONCE = 1; // attacks under way at once
+// How the waves escalate (enemy-design.md, section 4). Speed multiplies every
+// dive speed except a Bat's last leg after it commits, which stays a full
+// second so the warning never drops below 0.8 s; rev and glow times never change.
+const SPEEDS = [1, 1, 1.05, 1.1, 1.1, 1.15];
+export function waveRules(wave: number) {
+  return {
+    speed: wave <= SPEEDS.length ? SPEEDS[wave - 1] : Math.min(1.4, 1.15 + 0.05 * (wave - SPEEDS.length)),
+    atOnce: wave <= 3 ? 1 : wave <= 8 ? 2 : 3, // attacks under way at once (escorts don't count)
+    cyclopsDive: wave >= 2, // wave 1's Cyclopes stay in the formation
+    escorts: wave >= 3, // a diving Cyclops takes two Bats with it
+    pairs: wave >= 4, // Drones dive in mirrored pairs
+    secondPass: wave >= 4, // a Drone that misses comes down its column once more
+  };
+}
+// The swarm (Galaga's depleted formation): with this few left, nobody goes
+// home; a diver that misses comes back from the top and dives again.
+export const swarmAt = (wave: number) => (wave === 1 ? 3 : 4);
+const WRAP_WAIT = 0.5; // seconds above the screen before a swarming diver goes again
+const ESCORT_CHASE = 6; // how fast an escort keeps station, cells per second
 const DIVE_GAP = 0.8; // the next dive waits at least this long after an attack ends
 
 export type Move = "left" | "right" | "stay" | "fire";
@@ -97,7 +115,8 @@ export const KIND_NAME = ["Cyclops", "Bat", "Drone"] as const;
 
 // rev/flap/open: still in its slot, winding up. home: missed, flying back.
 // enter: flying in along a fly-in path. settle: from the end of that path to its slot.
-export type Phase = "rev" | "slide" | "fall" | "flap" | "zig" | "commit" | "open" | "loop" | "park" | "drop" | "home" | "enter" | "settle";
+// escort: a Bat keeping station beside a diving Cyclops. wrap: a swarming diver above the screen, about to go again.
+export type Phase = "rev" | "slide" | "fall" | "flap" | "zig" | "commit" | "open" | "loop" | "park" | "drop" | "home" | "enter" | "settle" | "escort" | "wrap";
 export type Dive = {
   phase: Phase;
   since: number; // when this phase began
@@ -110,6 +129,10 @@ export type Dive = {
   vx: number; // Bat: sideways speed once committed
   fired: number;
   path: number; // enter: which fly-in path (ENTRY_PATHS); -1 otherwise
+  speed: number; // the wave's speed when it launched
+  passes: number; // a Drone's extra falls down its column left (wave 4 on)
+  lead: number; // an escort: the id of the Cyclops it flies with; -1 otherwise
+  anchor: { x: number; y: number } | null; // a swarming diver winds up here instead of in its slot
 };
 export type Enemy = {
   id: number;
@@ -127,7 +150,7 @@ export type Bullet = { x: number; y: number; vx: number; vy: number; from: Kind 
 // lead: the one shot of a volley that counts toward the three on screen (a
 // Fan's side shots and the Wingmen's shots don't).
 export type Shot = { x: number; y: number; vx: number; lead: boolean };
-export type Mini = { x: number; y: number }; // a carrier Drone's mini-drone, falling beside it
+export type Mini = { x: number; y: number; vy: number }; // a carrier Drone's mini-drone, falling beside it
 // An Eye Beam: a carrier Cyclops's (warning from `warn`, deadly from `start` to `end`) or your own, which is instant.
 export type Beam = { x: number; from: "enemy" | "ship"; owner: number; warn: number; start: number; end: number };
 export type Pickup = { weapon: Weapon; x: number; y: number; landed: number | null }; // landed: when it reached your row
@@ -249,7 +272,7 @@ function formation(t: number, wave: number): Enemy[] {
         charge: null,
         carries: null,
         dived: false,
-        diving: { phase: "enter", since, x: start.x, y: start.y, col: 0, x0: 0, y0: 0, dir: 1, vx: 0, fired: fires ? 0 : 1, path },
+        diving: { phase: "enter", since, x: start.x, y: start.y, col: 0, x0: 0, y0: 0, dir: 1, vx: 0, fired: fires ? 0 : 1, path, speed: 1, passes: 0, lead: -1, anchor: null },
       });
     }
   return out;
@@ -372,23 +395,43 @@ function aimed(world: World, x: number, y: number): Bullet {
 }
 
 // The Bat's zigzag, fixed at launch: `age` seconds into it, how far across it is.
+// A faster wave runs the same zigzag faster.
 export function batZigX(d: Dive, age: number): number {
-  const leg = Math.floor(age / BAT_LEG);
-  const into = age - leg * BAT_LEG;
+  const a = age * d.speed;
+  const leg = Math.floor(a / BAT_LEG);
+  const into = a - leg * BAT_LEG;
   return d.x0 + d.dir * BAT_ZIG * (leg % 2 === 0 ? into : BAT_LEG - into);
 }
-export const batCommitAge = (d: Dive) => (COMMIT_ROW - d.y0) / BAT_DROP;
+export const batZigY = (d: Dive, age: number) => d.y0 + BAT_DROP * d.speed * age;
+export const batCommitAge = (d: Dive) => (COMMIT_ROW - d.y0) / (BAT_DROP * d.speed);
 
 // Launches a dive. Its whole plan is fixed here from where the ship is now,
 // except the two moments the design names: a Bat reads the ship once at
 // COMMIT_ROW, and a Cyclops aims each shot when it fires.
-export function startDive(world: World, e: Enemy) {
+export function startDive(world: World, e: Enemy, o: { col?: number; anchor?: { x: number; y: number } } = {}) {
   const t = world.t;
-  const p = slotPos(e, t);
-  const col = clamp(Math.round(world.ship.x), 0, COLS - 1);
-  const d: Dive = { phase: (["open", "flap", "rev"] as const)[e.kind], since: t, x: p.x, y: p.y, col, x0: p.x, y0: p.y, dir: 1, vx: 0, fired: 0, path: -1 };
+  const rules = waveRules(world.wave);
+  const p = o.anchor ?? slotPos(e, t);
+  const col = o.col ?? clamp(Math.round(world.ship.x), 0, COLS - 1);
+  const d: Dive = {
+    phase: (["open", "flap", "rev"] as const)[e.kind],
+    since: t,
+    x: p.x,
+    y: p.y,
+    col,
+    x0: p.x,
+    y0: p.y,
+    dir: 1,
+    vx: 0,
+    fired: 0,
+    path: -1,
+    speed: rules.speed,
+    passes: e.kind === 2 && rules.secondPass ? 1 : 0,
+    lead: -1,
+    anchor: o.anchor ?? null,
+  };
   if (e.kind === 1) {
-    d.x0 = e.slot.col + drift(t + BAT_FLAP); // where it leaves the formation
+    d.x0 = o.anchor ? o.anchor.x : e.slot.col + drift(t + BAT_FLAP); // where it leaves the formation
     d.dir = world.ship.x >= d.x0 ? 1 : -1; // its first zig heads toward the ship's side
     const reach = d.x0 + d.dir * BAT_ZIG * BAT_LEG;
     if (reach < 0 || reach > COLS - 1) d.dir = d.dir === 1 ? -1 : 1;
@@ -397,7 +440,25 @@ export function startDive(world: World, e: Enemy) {
   e.charge = null;
   e.dived = true;
   e.diving = d;
+  if (e.kind === 0 && rules.escorts && !o.anchor) takeEscorts(world, e);
 }
+
+// From wave 3 a diving Cyclops takes the two Bats nearest its column along,
+// a column out either side and a row behind, until it parks.
+function takeEscorts(world: World, c: Enemy) {
+  const free = world.enemies.filter((e) => e.alive && e.kind === 1 && !e.diving && e.charge === null);
+  for (const offset of [-1, 1]) {
+    const bat = free.filter((b) => !b.diving).sort((a, b) => Math.abs(a.slot.col - (c.slot.col + offset)) - Math.abs(b.slot.col - (c.slot.col + offset)))[0];
+    if (!bat) continue;
+    const p = slotPos(bat, world.t);
+    bat.charge = null;
+    bat.dived = true;
+    bat.diving = { ...c.diving!, phase: "escort", x: p.x, y: p.y, x0: p.x, y0: p.y, dir: offset as 1 | -1, lead: c.id, passes: 0, anchor: null };
+  }
+}
+
+// The Drone that pairs with one locked on column c: the mirror column, or two over if c is the middle.
+export const mirrorCol = (c: number) => (COLS - 1 - c === c ? c + 2 : COLS - 1 - c);
 
 function stepDive(world: World, e: Enemy, d: Dive, dt: number) {
   const t = world.t;
@@ -425,7 +486,7 @@ function stepDive(world: World, e: Enemy, d: Dive, dt: number) {
     case "rev":
     case "flap":
     case "open": {
-      const p = slotPos(e, t);
+      const p = d.anchor ?? slotPos(e, t);
       d.x = p.x;
       d.y = p.y;
       if (d.phase === "rev" && age >= DRONE_REV) next("slide");
@@ -442,19 +503,35 @@ function stepDive(world: World, e: Enemy, d: Dive, dt: number) {
       break;
     }
     case "slide":
-      if (e.kind === 2 ? toward(d.col, d.y, DRONE_SLIDE) : toward(d.col, HOVER_ROW, CY_SLIDE)) {
+      if (e.kind === 2 ? toward(d.col, d.y, DRONE_SLIDE * d.speed) : toward(d.col, HOVER_ROW, CY_SLIDE * d.speed)) {
         next(e.kind === 2 ? "fall" : "park");
         // a carrier Drone's Wingmen detach and fall a column either side of it
         if (e.kind === 2 && e.carries === "wingmen")
-          for (const x of [d.col - 1, d.col + 1]) if (x >= 0 && x <= COLS - 1) world.minis.push({ x, y: d.y });
+          for (const x of [d.col - 1, d.col + 1]) if (x >= 0 && x <= COLS - 1) world.minis.push({ x, y: d.y, vy: DRONE_FALL * d.speed });
       }
       break;
     case "fall":
-      d.y += DRONE_FALL * dt;
+      d.y += DRONE_FALL * d.speed * dt;
       break;
+    case "escort": {
+      // keep station beside the Cyclops; when it parks or dies, zigzag down alone
+      const lead = world.enemies.find((o) => o.id === d.lead && o.alive && o.diving && o.diving.phase !== "park" && o.diving.phase !== "drop");
+      if (lead) {
+        toward(lead.diving!.x + d.dir, lead.diving!.y - 1, ESCORT_CHASE * d.speed);
+        break;
+      }
+      d.lead = -1; // on its own now, so it counts toward the attacks at once
+      next("zig"); // peel away on its own side first (dir is still the side it flew on)
+      const reach = d.x0 + d.dir * BAT_ZIG * BAT_LEG;
+      if (reach < 0 || reach > COLS - 1) d.dir = d.dir === 1 ? -1 : 1;
+      break;
+    }
+    case "wrap":
+      if (age >= WRAP_WAIT) startDive(world, e, { anchor: { x: clamp(d.x, 0, COLS - 1), y: 0 } }); // same pattern, a new target
+      return;
     case "zig":
       d.x = batZigX(d, age);
-      d.y = d.y0 + BAT_DROP * age;
+      d.y = batZigY(d, age);
       if (d.y >= COMMIT_ROW) {
         d.col = world.ship.x; // the one time a Bat looks at the ship
         d.vx = (d.col - d.x) / ((SHIP_ROW - d.y) / BAT_COMMIT);
@@ -490,7 +567,7 @@ function stepDive(world: World, e: Enemy, d: Dive, dt: number) {
       if (d.fired >= CY_SHOTS) next("drop");
       break;
     case "drop":
-      d.y += CY_DROP * dt;
+      d.y += CY_DROP * d.speed * dt;
       break;
     case "home":
     case "settle": {
@@ -521,10 +598,19 @@ function stepDive(world: World, e: Enemy, d: Dive, dt: number) {
     d.fired++;
   }
   if (d.y > ROWS + 0.5) {
-    next("home"); // flew off the bottom: back in at the top of the same column
+    if (d.phase === "fall" && d.passes > 0) {
+      d.passes--; // wave 4 on: back down the same column once more
+      d.y = -1;
+      return;
+    }
+    next(swarming(world) ? "wrap" : "home"); // flew off the bottom: back in at the top of the same column
     d.y = -1;
   }
 }
+
+export const swarming = (world: World) => !world.enemies.some(arriving) && world.enemies.filter((e) => e.alive).length <= swarmAt(world.wave);
+// Escorts ride along with their Cyclops, so they don't count toward the attacks at once until they break away.
+const counted = (e: Enemy) => attacking(e) && e.diving!.lead < 0;
 
 // One physics step. `sim` is for prediction: the ship is put where a planned
 // path says, and nothing new launches (no new dives, no new volleys).
@@ -545,7 +631,7 @@ function step(world: World, dt: number, sim?: { shipX: number }): RunEvent {
     s.x += s.vx * dt;
   }
   world.shots = world.shots.filter((s) => s.y > -1 && s.x > -1 && s.x < COLS);
-  for (const m of world.minis) m.y += DRONE_FALL * dt;
+  for (const m of world.minis) m.y += m.vy * dt;
   world.minis = world.minis.filter((m) => m.y < ROWS + 0.5);
   world.beams = world.beams.filter((b) => t < b.end);
   for (const p of world.pickups)
@@ -585,9 +671,11 @@ function step(world: World, dt: number, sim?: { shipX: number }): RunEvent {
     world.nextVolley = Math.max(world.nextVolley, t + ENTRY_REST);
   } else if (!sim) {
     const waiting = () => world.enemies.filter((e) => e.alive && !e.diving && e.charge === null);
-    if (world.enemies.filter(attacking).length >= AT_ONCE) world.nextDive = Math.max(world.nextDive, t + DIVE_GAP);
+    const rules = waveRules(world.wave);
+    const room = rules.atOnce + (swarming(world) ? 1 : 0) - world.enemies.filter(counted).length;
+    if (room <= 0) world.nextDive = Math.max(world.nextDive, t + DIVE_GAP);
     else if (t >= world.nextDive) {
-      const pool = waiting();
+      const pool = waiting().filter((e) => e.kind !== 0 || rules.cyclopsDive);
       const total = pool.reduce((n, e) => n + DIVE_WEIGHT[e.kind], 0);
       if (total) {
         let r = rand(world) * total;
@@ -596,6 +684,12 @@ function step(world: World, dt: number, sim?: { shipX: number }): RunEvent {
         const e = carrier ?? pool.find((e) => (r -= DIVE_WEIGHT[e.kind]) < 0) ?? pool[pool.length - 1];
         startDive(world, e);
         world.divesThisWave++;
+        // wave 4 on: a Drone takes a partner, locked on the mirror column
+        if (e.kind === 2 && rules.pairs && room >= 2) {
+          const c = e.diving!.col;
+          const partner = pool.filter((o) => o !== e && o.kind === 2 && !o.diving).sort((a, b) => Math.abs(a.slot.col - e.slot.col) - Math.abs(b.slot.col - e.slot.col))[0];
+          if (partner) startDive(world, partner, { col: clamp(mirrorCol(c), 0, COLS - 1) });
+        }
       }
       world.nextDive = t + diveEvery(world.wave);
     }
@@ -689,7 +783,8 @@ function hitEnemy(world: World, e: Enemy, t: number) {
   }
   const at = enemyPos(e, t);
   world.pops.push({ x: at.x, y: at.y, kind: e.kind, t });
-  world.score += e.kind === 0 ? (attacking(e) ? 400 : 150) : attacking(e) ? 200 : 100;
+  const escorted = e.kind === 0 && world.enemies.some((o) => o.alive && o.diving?.phase === "escort" && o.diving.lead === e.id);
+  world.score += e.kind === 0 ? (attacking(e) ? (escorted ? 800 : 400) : 150) : attacking(e) ? 200 : 100;
   e.alive = false;
   world.kills++;
   world.beams = world.beams.filter((b) => b.owner !== e.id); // a dead Cyclops's beam goes out

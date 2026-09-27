@@ -1,7 +1,7 @@
 import {
-  BAT_DROP,
   batCommitAge,
   batZigX,
+  batZigY,
   COLS,
   COMMIT_ROW,
   CY_GLOW,
@@ -83,7 +83,7 @@ function arrowHead(ctx: CanvasRenderingContext2D, x: number, y: number, dx: numb
 function pathLine(ctx: CanvasRenderingContext2D, e: Enemy, d: Dive, t: number) {
   const color = BODY.enemy[e.kind];
   const column = (from: number, alpha: number) => dotted(ctx, [{ x: d.col, y: from }, { x: d.col, y: SHIP_ROW }], color, alpha, 2);
-  if (d.phase === "home" || d.phase === "enter" || d.phase === "settle") return;
+  if (d.phase === "home" || d.phase === "enter" || d.phase === "settle" || d.phase === "escort" || d.phase === "wrap") return;
   if (e.kind === 2) {
     // Drone: the column it will fall down, and a carrier's mini-drones' columns either side
     const from = d.phase === "fall" ? d.y + 0.6 : d.y;
@@ -125,7 +125,7 @@ function pathLine(ctx: CanvasRenderingContext2D, e: Enemy, d: Dive, t: number) {
   // Bat: the rest of its zigzag, down to the row where it commits
   const end = batCommitAge(d);
   const pts = [];
-  for (let a = d.phase === "zig" ? t - d.since : 0; a < end; a += 0.04) pts.push({ x: batZigX(d, a), y: d.y0 + BAT_DROP * a });
+  for (let a = d.phase === "zig" ? t - d.since : 0; a < end; a += 0.04) pts.push({ x: batZigX(d, a), y: batZigY(d, a) });
   pts.push({ x: batZigX(d, end), y: COMMIT_ROW });
   dotted(ctx, pts, color, 0.75);
 }
