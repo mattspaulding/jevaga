@@ -94,10 +94,9 @@ export default function Game() {
   const [bannerTone, setBannerTone] = useState<"hit" | "good">("hit");
   const [replaying, setReplaying] = useState(false);
   const replayingRef = useRef(false);
-  // Sound starts on unless muted before in this browser; read after mount so the first render matches the server's.
-  const [soundOn, setSoundOn] = useState(true);
+  // Sound starts on unless it was muted before in this browser (the game only renders in the browser, so this can read storage).
+  const [soundOn, setSoundOn] = useState(() => !sound.isMuted());
   useEffect(() => {
-    setSoundOn(!sound.isMuted());
     // In development, the voices can be checked from the console: await jevagaSound.render("boom")
     if (process.env.NODE_ENV !== "production") Object.assign(window, { jevagaSound: sound });
   }, []);

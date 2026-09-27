@@ -140,11 +140,11 @@ Build mode: fast (chosen 2026-09-25)
   Commit: `Add sound effects`
 
 - [ ] **14. A death looks like one**
-  Becomes usable: when the ship is hit the fight no longer just freezes. The ship blows apart (a bigger explosion with debris and a flash), then the enemies react: divers peel off and fly home, and the formation does a short victory dance before the run-over banner. Also the retuned sounds from the sound panel, picked by ear.
+  Becomes usable: when the ship is hit the fight no longer just freezes. The ship blows apart (a bigger explosion with debris and a flash), then the enemies react: divers peel off and fly home, and the formation does a short victory dance before the run-over banner.
   Why now: Matt, 2026-09-26: "when the player dies, the screen is just kind of freezes in place there. There should be some sort of like explosion and then the aliens would do something. Maybe like a little dance or some sort of celebration maybe or or just fly off." Every death is also what the replay and the video show.
-  PRD ref: `prd.md > The fight`, `prd.md > Sound`
-  Spec ref: `spec.md > Enemies, carriers and waves`, `spec.md > Sound`
-  Build: the death sequence as a render-side animation that starts from the world at the hit (the engine stops at the hit as it does now, so recorded deaths and replays don't change); the explosion and dance sprites or code-drawn effects; the chosen voice set wired into `lib/game/sound.ts`.
+  PRD ref: `prd.md > The fight`
+  Spec ref: `spec.md > Enemies, carriers and waves`
+  Build: the death sequence as a render-side animation that starts from the world at the hit (the engine stops at the hit as it does now, so recorded deaths and replays don't change); the explosion and dance sprites or code-drawn effects.
   Verify (mechanical): world-check still passes and replays still retrace exactly; the death sequence renders headless without touching the world; browser pane shows it after a hit, in live runs and replays, with no console errors.
   Learner check: Die on purpose. Does the death feel like a moment, and do the enemies' reactions read as a celebration?
   Commit: `Make a death look like one`
@@ -247,4 +247,5 @@ Activity mode:
 - Slice 13: 17 voices, each checked non-silent through an OfflineAudioContext in the browser pane. Cues are read off the world each animation frame, so a hidden tab (which pauses frames) can miss short sounds; that's fine, since nobody hears a hidden tab. The dev build exposes `jevagaSound` in the console to render or check a voice.
 - Matt on the slice 13 sounds, 2026-09-26: "The sounds aren't very good." Asked for a retune with more effort and a review panel. Since no agent can hear, every voice is now a pure function returning samples (`lib/game/voices/`), measured and drawn as spectrograms by `scripts/sound-lab.ts`, so a panel can design and judge sets and Matt picks by ear. The first sounds are kept as the `v1` baseline.
 - A death sequence was added to the list as slice 14 (Matt, 2026-09-26: the screen "freezes in place" when the ship dies; the aliens should "do a little dance... or just fly off"). Carriers, waves, the Enemy Library and honest failures move to slices 15 to 18.
+- The sound panel (2 researchers, 3 designers, 3 judges, then revisions) built three candidate sets: arcade (Galaga's wavetable and noise hardware), sfxr (classic sfxr presets) and juicy (modern layered retro). The judges split: juicy best for character (11 of 17 sounds), sfxr most often for the mix, arcade for craft. Matt listened on /sounds: "I like the juicy for all of the sounds." The game now plays juicy, rendering each take into an AudioBuffer ahead of time and rotating four variants so repeats don't play the same take twice running. The other sets stay in `lib/game/voices/` for the audition page.
 

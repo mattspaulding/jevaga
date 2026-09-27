@@ -128,7 +128,7 @@ Unchanged: `pnpm dev`, open http://localhost:3000 (`?seed=N` optional), keys in 
 ### Sound
 `lib/game/cues.ts`, `lib/game/sound.ts`. PRD ref: `prd.md > Sound`.
 - **Cues, not engine events.** The engine stays untouched, so replays stay exact. Each animation frame, `createCueTracker().update(world, replaying)` compares the world with what it saw last frame (the reload time, new shots, bullets and pops by identity, each enemy's phase, charge and hurt time, the wave, whether the ship is alive) and returns the cues since then. A different world object (a new run or a replay) is taken in silently, apart from one "start" or "rewind" cue.
-- **Voices.** Each cue is a short synth voice built from Web Audio oscillators, a noise buffer, filters and gain envelopes, written against `BaseAudioContext` so an `OfflineAudioContext` can render the same sounds for the video. One master gain; at most 12 voices at once.
+- **Voices.** Each sound is a pure function that returns its samples (`lib/game/voices/`, format in `types.ts`), so it plays in the browser, renders for the video and can be measured by `scripts/sound-lab.ts`. The game plays the `juicy` set, picked by ear on the development page `/sounds`: every take is rendered into an AudioBuffer in small batches after the first click, and four variants rotate per sound. One master gain; at most 12 voices at once.
 - **Mute and unlock.** The AudioContext is created or resumed on the first click or key press (browsers require it). Muted state lives in localStorage (wrapped in try/catch) and defaults to on.
 
 ### Enemy Library

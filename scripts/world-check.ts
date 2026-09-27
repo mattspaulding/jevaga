@@ -32,7 +32,6 @@ import {
   threatAt,
   threatOnPath,
   type Bullet,
-  type Enemy,
   type Kind,
   type World,
 } from "../lib/game/world";
