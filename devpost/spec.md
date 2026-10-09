@@ -236,4 +236,4 @@ Unchanged: Jev at `POST https://ai-gateway.vercel.sh/typesafe/v1/systemone` (pai
 
 **Open, answered in the build:**
 - Is 1.5 s of lead enough? Counted from `unsolved` deaths.
-- **Folder and repo name:** the project folder is still `GoFrogGo`.
+- **Folder and repo name:** the project folder was renamed from `GoFrogGo` to `Jevaga` on 2026-10-09.

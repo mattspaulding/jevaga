@@ -149,4 +149,4 @@ One screen: the shooter, Jev flying it in real time, Nemotron writing a rule aft
 - Training or fine-tuning a model. Jev learns only through its written instructions.
 
 ## Open Questions
-- **Folder and repo name**: the project folder is still `GoFrogGo`.
+- **Folder and repo name**: the project folder was renamed from `GoFrogGo` to `Jevaga` on 2026-10-09 (Matt: "Rename this to Jevaga").
