@@ -1,11 +1,14 @@
 import { MOVES, THREATS, type Move } from "@/lib/game/world";
-import { MAX_RULE_LENGTH, MAX_RULES } from "@/lib/system1/types";
+import { MAX_MOVE_LENGTH, MAX_RULE_LENGTH, MAX_RULES, MAX_STATE_LENGTH } from "@/lib/system1/types";
 import { writeRule, type CoachInput } from "@/lib/system2/coach";
 
 // System 2: after a death the page sends what Jev read and picked in the last
 // second or so; Nemotron on Nebius Token Factory writes one rule. The key stays here.
 const isMoves = (m: unknown): m is Record<Move, string> =>
-  !!m && typeof m === "object" && MOVES.every((k) => typeof (m as Record<string, unknown>)[k] === "string" && ((m as Record<string, string>)[k]).length < 500);
+  !!m && typeof m === "object" && MOVES.every((k) => typeof (m as Record<string, unknown>)[k] === "string" && ((m as Record<string, string>)[k]).length <= MAX_MOVE_LENGTH);
+
+// A death keeps the questions from the last 1.5 s, at most one every 250 ms: about 8.
+const MAX_ASKED = 12;
 
 export async function POST(request: Request) {
   const body = (await request.json().catch(() => null)) as Partial<CoachInput> | null;
@@ -13,13 +16,13 @@ export async function POST(request: Request) {
   const valid =
     Array.isArray(asked) &&
     asked.length > 0 &&
-    asked.length <= 16 &&
+    asked.length <= MAX_ASKED &&
     asked.every(
       (a) =>
         a &&
         typeof a.t === "number" &&
         typeof a.state === "string" &&
-        a.state.length < 8000 &&
+        a.state.length <= MAX_STATE_LENGTH &&
         isMoves(a.moves) &&
         MOVES.includes(a.pick) &&
         MOVES.every((m) => typeof a.probabilities?.[m] === "number"),

@@ -20,7 +20,8 @@ const jersey20 = Jersey_20({
 
 export const metadata: Metadata = {
   title: "Jevaga",
-  description: "Jev flies a Galaga-style ship in real time while Nemotron on Nebius plans its moves.",
+  description:
+    "An AI pilot flies a Galaga-style ship. After each death, NVIDIA Nemotron writes it one rule, and a replay of that death decides whether the rule stays.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

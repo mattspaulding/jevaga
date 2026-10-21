@@ -21,6 +21,12 @@ export type System1 = { decide(input: DecideInput): Promise<Decision> };
 export const MAX_RULES = 8;
 export const MAX_RULE_LENGTH = 300;
 
+// Request caps for the public API routes. Real fights describe in at most
+// ~1,400 characters and a move in ~175 (measured over 40 seeds), so these
+// leave headroom while keeping a stranger's paid call close to a real one.
+export const MAX_STATE_LENGTH = 4000;
+export const MAX_MOVE_LENGTH = 400;
+
 // Jev starts dumb: one line, no hand-written survival rule. Everything else
 // it knows, it learned from a death and the rule was proven on a replay.
 export function instructionsFor(rules: string[]): string {

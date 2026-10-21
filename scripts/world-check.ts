@@ -11,6 +11,7 @@ import { afterDeath, emptyBook, type Book } from "../lib/learn/judge";
 import { playback, replay, type Decide } from "../lib/learn/replay";
 import type { Coaching } from "../lib/system2/coach";
 import { fake } from "../lib/system1/fake";
+import { MAX_MOVE_LENGTH, MAX_STATE_LENGTH } from "../lib/system1/types";
 import {
   act,
   advance,
@@ -756,6 +757,29 @@ function immortal(w: World) {
     act(w, (["left", "fire", "right", "fire", "stay"] as const)[i % 5]);
   }
   check(`describe() matches describeFight + describeMoves on ${same}/${asks} asks`, same === asks && asks > 40);
+}
+
+// The public API routes reject anything longer than a real fight: long fights into later waves stay well under the caps.
+{
+  let longestState = 0;
+  let longestMove = 0;
+  let waves = 0;
+  for (let seed = 1; seed <= 20; seed++) {
+    const w = newWorld(seed);
+    for (let i = 0; i < 320; i++) {
+      const { state, moves } = describe(w);
+      longestState = Math.max(longestState, state.length);
+      longestMove = Math.max(longestMove, ...Object.values(moves).map((m) => m.length));
+      stepN(w, 14);
+      immortal(w);
+      act(w, (["fire", "left", "fire", "right", "fire", "stay"] as const)[(i + seed) % 6]);
+    }
+    waves = Math.max(waves, w.wave);
+  }
+  check(
+    `fight descriptions stay under the API caps through wave ${waves} (longest ${longestState} of ${MAX_STATE_LENGTH} chars, move ${longestMove} of ${MAX_MOVE_LENGTH})`,
+    longestState * 2 <= MAX_STATE_LENGTH && longestMove * 2 <= MAX_MOVE_LENGTH && waves >= 3,
+  );
 }
 
 // In formation: Bats drop straight bullets, a Cyclops fires an aimed shot after its eye glows, Drones never fire.

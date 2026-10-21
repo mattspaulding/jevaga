@@ -4,9 +4,7 @@
 // Run: pnpm sound-lab -- <set> [outDir]
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-// sharp comes with Next.js (image optimization) rather than as our own dependency, so it's loaded untyped.
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const sharp = require("sharp");
+import sharp from "sharp";
 import { SOUND_BRIEF, SOUND_NAMES, type SoundName, type VoiceSet } from "../lib/game/voices/types";
 
 const RATE = 44100;

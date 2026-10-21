@@ -1,6 +1,6 @@
 import { MOVES, type Move } from "@/lib/game/world";
 import { system1 } from "@/lib/system1";
-import { MAX_RULES, MAX_RULE_LENGTH } from "@/lib/system1/types";
+import { MAX_MOVE_LENGTH, MAX_RULES, MAX_RULE_LENGTH, MAX_STATE_LENGTH } from "@/lib/system1/types";
 
 // System 1: the page sends the fight in words, the four move descriptions and
 // the rulebook; Jev (or the offline fake) picks the move. The key stays here.
@@ -10,9 +10,9 @@ export async function POST(request: Request) {
   const valid =
     typeof state === "string" &&
     state.length > 0 &&
-    state.length < 8000 &&
+    state.length <= MAX_STATE_LENGTH &&
     moves &&
-    MOVES.every((m: Move) => typeof moves[m] === "string" && moves[m].length < 500) &&
+    MOVES.every((m: Move) => typeof moves[m] === "string" && moves[m].length <= MAX_MOVE_LENGTH) &&
     Array.isArray(rules) &&
     rules.length <= MAX_RULES &&
     rules.every((r: unknown) => typeof r === "string" && r.length > 0 && r.length <= MAX_RULE_LENGTH);
