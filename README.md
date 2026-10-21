@@ -18,6 +18,18 @@ Once Jev has a rule, its rulebook also opens with one line written by hand: "Whe
 
 Every answer from the live run is pinned to the 20 ms physics step it landed on, so a replay asks Jev the same questions at the same moments, and with a new rule the only thing that can change is what Jev picks. Jev doesn't always answer the same question the same way, though. If the replay with the old rulebook survives too, the game calls that death luck and writes no rule.
 
+## Nemotron on Nebius Token Factory
+
+The server route `app/api/coach` calls `https://api.tokenfactory.nebius.com/v1/chat/completions` with plain `fetch`, so the key stays on the server. The model is `nvidia/Nemotron-3_5-Lightning`, thinking off (`chat_template_kwargs.enable_thinking: false`), `max_tokens` 300, temperature 0.3. A prompt is 4,000 to 4,800 tokens: the rulebook and each question Jev answered in the last 1.5 s, with hindsight. The reply is three lines: `What happened`, `Change` (add, replace N, or none) and `Rule`.
+
+The coach had three jobs in two days, each a new prompt to the same endpoint and key. First it coached a frog-crossing prototype. On 2026-09-26 it planned live every 3 seconds, but gave the same advice in the same spot and never learned from a death. The same day it became the rule writer.
+
+Thinking is one flag, so `scripts/coach-bench.ts` tried both on the same 8 saved deaths. Off, Nemotron wrote 7 rules at about a second each, and on average each saved 5.1 of the other 7. On, it took 16 s a rule and wrote 3, none usable.
+
+On 2026-10-21 a learn run on seed 11 lost 3 of 8 deaths to the 15 s timeout when Token Factory slowed down. That afternoon Nano and Super each got 10 real coach calls, about $0.003 a model, with nothing changed but the model name. Nano (`nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B`) is now the fallback. Two learn runs since, no coach failures.
+
+An 8-run session spent $0.0035 on 13 Nemotron calls and $0.036 on Jev. Nemotron runs on a $25 hackathon credit, and Token Factory is the only Nebius service used.
+
 ## Run it
 
 You need Node 22 or newer and pnpm.
