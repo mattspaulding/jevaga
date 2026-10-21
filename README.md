@@ -73,3 +73,7 @@ Jev costs about $0.00003 an answer. At four answers a second that's under a cent
 ## Built for
 
 The Build With AI: Basics and the Nebius x NVIDIA Global AI hackathons on Devpost.
+
+## License
+
+MIT. See [LICENSE](LICENSE).
