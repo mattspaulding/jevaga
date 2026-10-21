@@ -2,6 +2,8 @@
 
 A Galaga-style shooter flown by an AI pilot that learns from its deaths.
 
+Play it at https://jevaga.vercel.app.
+
 Jev picks the ship's move up to four times a second. It starts with one instruction: stay alive and shoot enemies. Every time it dies, NVIDIA Nemotron studies the last second and a half and writes it one rule. The game then replays that exact death with the rule added, and the rule only stays if the ship survives.
 
 ## How Jev and Nemotron split the work

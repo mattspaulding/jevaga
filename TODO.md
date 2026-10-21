@@ -2,6 +2,15 @@
 
 Planning is done and approved (`devpost/scope.md`, `prd.md`, `spec.md`). Deadlines: Build With AI Basics closes **Oct 26, 5 PM ET**; Nebius x NVIDIA closes **Oct 30, 10 AM PT**, and the demo URL must stay live through judging (Dec 1 to 15).
 
+## Ship
+- [x] Public repo github.com/mattspaulding/jevaga under MIT (2026-10-21).
+- [x] Vercel project `jevaga` on the Strawberry Digital team, live at https://jevaga.vercel.app (2026-10-21). The team-scoped `*.vercel.app` aliases sit behind Vercel login; `jevaga.vercel.app` is public.
+- [ ] Paste `AI_GATEWAY_API_KEY` and `NEBIUS_API_KEY` into the Vercel project (Production, Sensitive), then redeploy. Until then JEV PLAYS shows JEV UNAVAILABLE.
+- [ ] Firewall rate limits per IP: `/api/move` 600 a minute, `/api/coach` 30 a minute. The API can't create the project's firewall until the Firewall tab has been opened once.
+- [ ] Check that auto top-up is off on the AI Gateway credit and on Nebius, so the prepaid balance is the most anyone can burn. Check both balances around Dec 1.
+- [ ] Re-read both rules pages by hand. WebFetch got a 403 from Devpost on 2026-10-21, so the notes in `hackathons/` are from 2026-09-25.
+- [ ] Demo video, Devpost write-ups, and the 6-ship final review.
+
 ## Waiting on
 - [x] **Nebius promo code.** Arrived 2026-09-26 in the strawberrydigitalllc@gmail.com inbox and applied the same day: Token Factory account balance $25.00, no expiry (the email says credits "won't expire" once applied; apply-by date was 2026-12-31).
 
@@ -20,7 +29,7 @@ Planning is done and approved (`devpost/scope.md`, `prd.md`, `spec.md`). Deadlin
 - [x] **Death just freezes.** Done in slice 14. The ship's explosion plays (`components/GameCanvas.tsx`, `BOOM_MS` in `lib/game/render.ts`), then the screen sits still through the coach's studying/replay pause. Matt (2026-09-26): give the aliens something to do instead of freezing there, an explosion, then the aliens react, a little dance, some kind of celebration, or just flying off.
 
 ## Ideas
-- [ ] **A Fire TV version for Amazon's Build, Ship, Shape hackathon** (going for it, Matt 2026-10-09, under family entertainment: "AI-enhanced viewing... that's stretching what that means." The track doesn't require AI; the game is the product and Jev is the twist. Cutoff: start it only once the play-through, the Vercel deploy and the video are done, by Oct 19; otherwise drop it) (https://amazonappdev2026.devpost.com/). Found in a Devpost sweep on 2026-09-28: of 23 open or upcoming hackathons, it's the only other one Jevaga could enter with a real fit. Submissions close **Fri Oct 23, 12:00 PM PT**, three days before Build With AI. The Fire TV track pays $25,000 / $15,000 / $4,000 plus AWS credits.
+- [x] **Dropped 2026-10-21: the Oct 19 cutoff passed with no deploy or video.** **A Fire TV version for Amazon's Build, Ship, Shape hackathon** (going for it, Matt 2026-10-09, under family entertainment: "AI-enhanced viewing... that's stretching what that means." The track doesn't require AI; the game is the product and Jev is the twist. Cutoff: start it only once the play-through, the Vercel deploy and the video are done, by Oct 19; otherwise drop it) (https://amazonappdev2026.devpost.com/). Found in a Devpost sweep on 2026-09-28: of 23 open or upcoming hackathons, it's the only other one Jevaga could enter with a real fit. Submissions close **Fri Oct 23, 12:00 PM PT**, three days before Build With AI. The Fire TV track pays $25,000 / $15,000 / $4,000 plus AWS credits.
   - What it would take: package Jevaga as a Fire TV web app (Fire OS or Vega OS) played with the remote, d-pad to steer and select to fire, and test it on a Fire TV device. Every track is pass/fail on "reasonably applies the required APIs/SDKs", so it has to really run on Fire TV. About a few days of work.
   - Also required: a public repo, a demo video under 3 minutes, a written note on what changed during the entry period, and product feedback on the Fire TV tooling used.
   - Rules check: a project started Sep 25 is inside its entry period (opened Aug 31), and nothing stops Jevaga also being entered in Build With AI and Nebius x NVIDIA. Open to a US individual.
