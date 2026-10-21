@@ -2,6 +2,15 @@
 
 Pulled 2026-09-25 from https://nebiusglobalaihackathon.devpost.com/ (main, rules, resources). Re-check the rules page before submitting.
 
+## Re-read 2026-10-21 (rules page, in Chrome)
+- **Video must be on YouTube** (not Vimeo), under 3 minutes, and must not include third-party trademarks or copyrighted music. One YouTube video can serve both entries.
+- **README must highlight** "how you've used NVIDIA Nemotron or other NVIDIA open source models and where Token Factory accelerated your workflow and any other Nebius Tools or Services used." The README says what Nemotron does but not this.
+- "Runs on Token Factory" means "the project makes a runtime call to the Token Factory inference API". `lib/system2/coach.ts` does.
+- License must be detectable in the repo's About section. GitHub detects MIT.
+- Stage one: "a genuine attempt at the track's stated goal, not a superficial rebrand". Best Apps and Agents is the closest track: "any app or agent someone would actually use".
+- Quality of the Idea now reads: "a creative, non-obvious use of Nebius Token Factory ... and NVIDIA Nemotron ... and does the team show genuine understanding of the problem space?"
+- Most Valuable Feedback ($100 + swag, 10 of them) is judged on "completeness, viability, and potential impact of the feedback."
+
 ## Dates
 - Submission window: 2026-08-26 to **2026-10-30, 10:00 AM PDT**
 - Judging: Dec 1 to 15, 2026. Winners around Jan 11, 2027. The project must stay free to use and working until judging ends. (Rules page, verified 2026-09-25.)
