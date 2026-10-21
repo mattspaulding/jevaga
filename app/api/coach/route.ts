@@ -7,6 +7,9 @@ import { writeRule, type CoachInput } from "@/lib/system2/coach";
 const isMoves = (m: unknown): m is Record<Move, string> =>
   !!m && typeof m === "object" && MOVES.every((k) => typeof (m as Record<string, unknown>)[k] === "string" && ((m as Record<string, string>)[k]).length <= MAX_MOVE_LENGTH);
 
+// Lightning gets 8 s (60 s with thinking on), then Nano 15 s.
+export const maxDuration = 90;
+
 // A death keeps the questions from the last 1.5 s, at most one every 250 ms: about 8.
 const MAX_ASKED = 12;
 

@@ -9,7 +9,7 @@ import { createRecorder } from "../lib/learn/recorder";
 import { paced, replay, type Decide } from "../lib/learn/replay";
 import { newWorld, resetRun } from "../lib/game/world";
 import { system1 } from "../lib/system1";
-import { writeRule } from "../lib/system2/coach";
+import { primaryCoachModel, writeRule } from "../lib/system2/coach";
 import { addCoachCall, addJevAnswer, emptyUsage, formatUsd, summarizeUsage, totalCostUsd } from "../lib/usage";
 
 const args = process.argv.slice(2).filter((a) => a !== "--");
@@ -34,6 +34,7 @@ const decide = paced(decideRaw);
 const coach: typeof writeRule = (input) =>
   writeRule(input).then((c) => {
     addCoachCall(usage, c.usage);
+    if (c.model && c.model !== primaryCoachModel()) console.log(`    (fallback: ${c.model} wrote this one)`);
     return c;
   });
 

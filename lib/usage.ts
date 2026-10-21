@@ -10,14 +10,22 @@ export const emptyUsage = (): Usage => ({
   nemotron: { calls: 0, inputTokens: 0, outputTokens: 0, costUsd: 0 },
 });
 
-// Nebius Token Factory list price for nvidia/Nemotron-3_5-Lightning, from the
-// Token Factory model endpoints page, checked 2026-09-26. Jev's cost comes
+// Nebius Token Factory list prices in dollars per million tokens. Lightning:
+// the Token Factory model endpoints page, checked 2026-09-26. Nano (the coach's
+// fallback): Nebius's listing on cloudprice.net and typingmind.com, checked
+// 2026-10-21, because Nebius's own price page needs a login. Jev's cost comes
 // back on every answer (provider_metadata.gateway.cost) and is never derived.
-export const NEMOTRON_INPUT_PER_1M_USD = 0.06;
-export const NEMOTRON_OUTPUT_PER_1M_USD = 0.24;
+const NEMOTRON_PRICES: Record<string, { input: number; output: number }> = {
+  "nvidia/Nemotron-3_5-Lightning": { input: 0.06, output: 0.24 },
+  "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B": { input: 0.06, output: 0.24 },
+};
+export const NEMOTRON_INPUT_PER_1M_USD = NEMOTRON_PRICES["nvidia/Nemotron-3_5-Lightning"].input;
+export const NEMOTRON_OUTPUT_PER_1M_USD = NEMOTRON_PRICES["nvidia/Nemotron-3_5-Lightning"].output;
 
-export function nemotronCost(inputTokens: number, outputTokens: number): number {
-  return (inputTokens / 1_000_000) * NEMOTRON_INPUT_PER_1M_USD + (outputTokens / 1_000_000) * NEMOTRON_OUTPUT_PER_1M_USD;
+// A model with no looked-up price is counted at Lightning's.
+export function nemotronCost(inputTokens: number, outputTokens: number, model?: string): number {
+  const p = (model && NEMOTRON_PRICES[model]) || NEMOTRON_PRICES["nvidia/Nemotron-3_5-Lightning"];
+  return (inputTokens / 1_000_000) * p.input + (outputTokens / 1_000_000) * p.output;
 }
 
 type Counted = { inputTokens?: number; outputTokens?: number; costUsd?: number };

@@ -10,7 +10,7 @@ Jev picks the ship's move up to four times a second. It starts with one instruct
 
 **Jev is the fast one.** It's TypeSafe's Jev model, called through Vercel AI Gateway. Up to four times a second the game describes the fight in plain sentences ("where you stop (x 4.0): Bat bullet in 0.4 s") along with what each of the four moves would lead to, and Jev picks left, right, stay or fire. An answer takes about 0.3 seconds, and the fight keeps moving while it thinks. Jev also gets its rulebook with every question.
 
-**Nemotron is the slow one.** It's NVIDIA Nemotron 3.5 Lightning on Nebius Token Factory. It only runs after a death. It reads what Jev saw and picked just before the hit, then writes one rule in the same words Jev reads, or replaces an old one. The rulebook holds at most 8.
+**Nemotron is the slow one.** It's NVIDIA Nemotron 3.5 Lightning on Nebius Token Factory, which usually answers in under a second. If Lightning hasn't answered in 8 seconds, the game asks Nemotron 3 Nano on Token Factory instead. It only runs after a death. It reads what Jev saw and picked just before the hit, then writes one rule in the same words Jev reads, or replaces an old one. The rulebook holds at most 8.
 
 **The game decides, not either model.** Before a rule is kept, the game replays the death on the same physics steps with the new rule. The ship has to survive. The last 8 deaths the rulebook already fixed have to still survive. And Jev has to keep firing in calm moments, so a rule can't make it safe by making it useless. If a rule fails, Nemotron hears why and gets one more try.
 
@@ -53,7 +53,8 @@ In JEV PLAYS, nothing pretends to play. YOU PLAY needs no model at all.
 - **Jev drops out mid-run.** The fight pauses, the chip says it's retrying, and it picks up again when Jev answers.
 - **Jev drops out while the death is being replayed, before Nemotron is asked.** No rule for that death, and the COACH window says why.
 - **Jev drops out while a rule is being tested.** The rule isn't kept. The COACH window says it couldn't be tested, and the rulebook stays as it was.
-- **Nemotron can't be reached.** No rule for that death. The COACH window says Nemotron didn't answer, and the next run starts with the rulebook unchanged.
+- **Nemotron Lightning is slow or overloaded.** Nemotron 3 Nano writes the rule instead.
+- **Neither Nemotron can be reached.** No rule for that death. The COACH window says Nemotron didn't answer, and the next run starts with the rulebook unchanged.
 
 ## Offline
 
@@ -61,7 +62,7 @@ Set `SYSTEM1=fake` in `.env.local` and restart. A stand-in pilot flies instead o
 
 ## What it costs
 
-Jev costs about $0.00003 an answer. At four answers a second that's under a cent a minute. Nemotron is $0.06 per million input tokens and $0.24 per million output tokens (checked 2026-09-26), a fraction of a cent per death. The same question asked twice, which happens a lot in replays, is answered from an in-memory cache for free.
+Jev costs about $0.00003 an answer. At four answers a second that's under a cent a minute. Nemotron is $0.06 per million input tokens and $0.24 per million output tokens (checked 2026-09-26), a fraction of a cent per death. Nano, the fallback, is listed at the same price (third-party listings, checked 2026-10-21). The same question asked twice, which happens a lot in replays, is answered from an in-memory cache for free.
 
 ## Checks and scripts
 

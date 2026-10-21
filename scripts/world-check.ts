@@ -9,7 +9,7 @@ import { LETTERS, SPRITES } from "../lib/game/sprites";
 import { createRecorder, type Death } from "../lib/learn/recorder";
 import { afterDeath, emptyBook, type Book } from "../lib/learn/judge";
 import { playback, replay, type Decide } from "../lib/learn/replay";
-import type { Coaching } from "../lib/system2/coach";
+import { parseCoaching, writeRule, type Coaching } from "../lib/system2/coach";
 import { fake } from "../lib/system1/fake";
 import { instructionsFor, MAX_MOVE_LENGTH, MAX_STATE_LENGTH } from "../lib/system1/types";
 import {
@@ -1181,7 +1181,56 @@ async function failureChecks() {
   check(`fake Jev is labeled simulated, and with two rules it dodges a bullet 0.9 s away that it ignores with none (${calm.move}, then ${careful.move})`, calm.source === "simulated" && calm.move === "stay" && careful.move !== "stay" && careful.move !== "fire");
 }
 
-replayChecks().then(failureChecks).then(() => {
+// The coach: its reply is read even when the model slips on the format, and a
+// slow or overloaded Lightning hands the death to Nemotron Nano.
+async function coachChecks() {
+  const read = (content: string, rules = 0) => {
+    try {
+      return parseCoaching({ finish_reason: "stop", message: { content } }, rules);
+    } catch {
+      return null;
+    }
+  };
+  const echoed = read("What happened: stayed under a Cyclops shot.\nChange: add | replace 0 | none\nRule: If a Cyclops shot arrives in under 1 s, pick the option where nothing arrives soon.");
+  const oneLine = read("What happened: stayed under a Cyclops shot.\nChange: add | Rule: When a Cyclops shot arrives in under 1 s, pick the option where nothing arrives soon.");
+  const plain = read("What happened: stayed.\nChange: replace 1\nRule: Glide away from a revving Drone.", 1);
+  const barred = read("What happened: stayed.\nChange: replace | 2\nRule: Glide away from a revving Drone.", 2);
+  check(
+    "the coach's reply is read when it echoes the template's choices or puts the rule on the change line",
+    echoed?.change.kind === "add" && !!echoed.rule?.startsWith("If a Cyclops") && oneLine?.change.kind === "add" && !!oneLine.rule?.startsWith("When a Cyclops") && plain?.change.kind === "replace" && barred?.change.kind === "replace" && barred.change.n === 2,
+  );
+
+  const realFetch = globalThis.fetch;
+  const realKey = process.env.NEBIUS_API_KEY;
+  process.env.NEBIUS_API_KEY = "test";
+  const reply = { choices: [{ finish_reason: "stop", message: { content: "What happened: stayed.\nChange: add\nRule: Glide away from a revving Drone." } }], usage: { prompt_tokens: 4000, completion_tokens: 50 } };
+  const asked: string[] = [];
+  const input = { asked: [], tHit: 1, hitBy: { by: "Drone" as const, x: 4, y: 11 }, rules: [] };
+  try {
+    globalThis.fetch = (async (_url: string, init: { body: string }) => {
+      const model = JSON.parse(init.body).model as string;
+      asked.push(model);
+      if (model.includes("Lightning")) throw new DOMException("The operation was aborted due to timeout", "TimeoutError");
+      return new Response(JSON.stringify(reply), { status: 200 });
+    }) as typeof fetch;
+    const c = await writeRule(input);
+    check(`a timed-out Lightning hands the death to Nano (${asked.join(", ")})`, asked.length === 2 && c.model === "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B" && c.rule === "Glide away from a revving Drone.");
+
+    asked.length = 0;
+    globalThis.fetch = (async (_url: string, init: { body: string }) => {
+      asked.push(JSON.parse(init.body).model);
+      return new Response("{}", { status: 401 });
+    }) as typeof fetch;
+    const refused = await writeRule(input).then(() => null, (e: Error) => e.message);
+    check(`a bad key isn't retried on another model (${refused})`, asked.length === 1 && refused === "Token Factory returned 401");
+  } finally {
+    globalThis.fetch = realFetch;
+    if (realKey === undefined) delete process.env.NEBIUS_API_KEY;
+    else process.env.NEBIUS_API_KEY = realKey;
+  }
+}
+
+replayChecks().then(failureChecks).then(coachChecks).then(() => {
   console.log(failures ? `\n${failures} check(s) failed` : "\nAll checks passed");
   process.exit(failures ? 1 : 0);
 });

@@ -108,7 +108,7 @@ export async function afterDeath(death: Death, before: Book, deps: JudgeDeps): P
       a.coaching = await deps.coach({ asked: death.asked, tHit: death.tHit, hitBy: death.hitBy, rules: book.rules, retry });
     } catch (e) {
       a.error = e instanceof Error ? e.message : String(e);
-      if (!/timeout|aborted|fetch|network|50\d/i.test(a.error)) retry = `your reply couldn't be used (${a.error}).`;
+      if (!/timeout|aborted|fetch|network|429|5\d\d/i.test(a.error)) retry = `your reply couldn't be used (${a.error}).`;
       check();
       continue;
     }

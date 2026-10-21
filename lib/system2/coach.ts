@@ -25,6 +25,7 @@ export type Coaching = {
   happened: string;
   change: Change;
   rule: string | null;
+  model?: string; // which Nemotron answered
   usage?: { inputTokens: number; outputTokens: number; costUsd: number };
 };
 
@@ -100,14 +101,28 @@ export function describeDeath(input: CoachInput): string {
 // Nemotron's thinking mode: COACH_THINKING=on|off (measured with scripts/coach-bench.ts).
 const thinking = () => process.env.COACH_THINKING === "on";
 
-export async function writeRule(input: CoachInput): Promise<Coaching> {
-  const key = process.env.NEBIUS_API_KEY;
-  if (!key) throw new CoachError("NEBIUS_API_KEY is not set");
+// Lightning writes the rule. If it hasn't answered in 8 s (30 calls on
+// 2026-10-21 took 0.5 to 1.3 s), or Token Factory is overloaded, Nemotron 3
+// Nano is asked instead. On 2026-10-21 a slow stretch on Lightning timed out
+// every call for three deaths in a row; Nano answers in about 1 s and writes
+// the same three lines.
+export const primaryCoachModel = () => process.env.COACH_MODEL || "nvidia/Nemotron-3_5-Lightning";
+const FALLBACK = () => process.env.COACH_FALLBACK_MODEL || "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B";
+const PRIMARY_TIMEOUT_MS = 8_000;
+const FALLBACK_TIMEOUT_MS = 15_000;
+
+// Worth asking another model: no answer in time, no connection, or Token Factory overloaded.
+const passOn = (e: unknown) =>
+  (e instanceof Error && /TimeoutError|AbortError/.test(e.name)) ||
+  e instanceof TypeError || // fetch failed: no connection
+  (e instanceof CoachError && /returned (429|5\d\d)/.test(e.message));
+
+async function ask(model: string, input: CoachInput, timeoutMs: number, key: string) {
   const res = await fetch(URL, {
     method: "POST",
     headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
     body: JSON.stringify({
-      model: process.env.COACH_MODEL || "nvidia/Nemotron-3_5-Lightning",
+      model,
       // Thinking shares max_tokens, so it gets far more room when it's on.
       max_tokens: thinking() ? 4000 : 300,
       temperature: 0.3,
@@ -117,16 +132,34 @@ export async function writeRule(input: CoachInput): Promise<Coaching> {
         { role: "user", content: describeDeath(input) },
       ],
     }),
-    signal: AbortSignal.timeout(thinking() ? 60_000 : 15_000),
+    signal: AbortSignal.timeout(timeoutMs),
   });
-  const body = await res.json().catch(() => null);
   if (!res.ok) throw new CoachError(`Token Factory returned ${res.status}`);
+  // A body that stalls or drops partway is a slow model too, not a bad reply.
+  return res.json().catch((e) => {
+    if (passOn(e)) throw e;
+    return null;
+  });
+}
+
+export async function writeRule(input: CoachInput): Promise<Coaching> {
+  const key = process.env.NEBIUS_API_KEY;
+  if (!key) throw new CoachError("NEBIUS_API_KEY is not set");
+  let model = primaryCoachModel();
+  let body;
+  try {
+    body = await ask(model, input, thinking() ? 60_000 : PRIMARY_TIMEOUT_MS, key);
+  } catch (e) {
+    if (!passOn(e) || FALLBACK() === "off" || FALLBACK() === model) throw e;
+    model = FALLBACK();
+    body = await ask(model, input, FALLBACK_TIMEOUT_MS, key);
+  }
   const coaching = parseCoaching(body?.choices?.[0], input.rules.length);
   // Token Factory reports tokens, not a price; the price is looked up, not guessed.
   const usage = body?.usage;
   const inputTokens = typeof usage?.prompt_tokens === "number" ? usage.prompt_tokens : 0;
   const outputTokens = typeof usage?.completion_tokens === "number" ? usage.completion_tokens : 0;
-  return { ...coaching, usage: { inputTokens, outputTokens, costUsd: nemotronCost(inputTokens, outputTokens) } };
+  return { ...coaching, model, usage: { inputTokens, outputTokens, costUsd: nemotronCost(inputTokens, outputTokens, model) } };
 }
 
 export function parseCoaching(
@@ -137,13 +170,21 @@ export function parseCoaching(
   if (choice?.finish_reason === "length" && !text.trim()) throw new CoachError("The coach ran out of tokens");
   const think = text.lastIndexOf("</think>");
   if (think >= 0) text = text.slice(think + "</think>".length);
-  const lines = text.split("\n").map((l) => l.trim().replace(/^[*_#>\s-]+/, "").replace(/\*\*/g, ""));
+  const lines = text
+    .split("\n")
+    .map((l) => l.trim().replace(/^[*_#>\s-]+/, "").replace(/\*\*/g, ""))
+    // "Change: add | Rule: ..." on one line: the rule gets its own line.
+    .flatMap((l) => (/^change\b/i.test(l) && /\|\s*rule\s*:/i.test(l) ? l.split(/\|\s*(?=rule\s*:)/i).map((p) => p.trim()) : [l]));
   const field = (name: string) => {
     const line = lines.find((l) => l.toLowerCase().startsWith(name));
     return line ? line.slice(line.indexOf(":") + 1).trim().replace(/^["']|["']$/g, "") : null;
   };
   const happened = field("what happened");
-  const changeText = (field("change") ?? "").toLowerCase();
+  // "add | replace 0 | none" echoes the template's choices; the first one is the pick.
+  // "replace | 2" is one choice split by the bar.
+  const changeLine = (field("change") ?? "").toLowerCase();
+  const first = changeLine.split("|")[0].trim();
+  const changeText = first === "replace" ? changeLine : first;
   const rule = field("rule");
   if (!happened) throw new CoachError("The coach didn't say what happened");
   // The panel shows it; keep it to one readable sentence.
