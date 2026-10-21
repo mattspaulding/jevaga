@@ -410,7 +410,7 @@ export default function Game() {
           <h1 className="title">JEVAGA</h1>
           <StatusChip status={status} error={error} />
         </div>
-        <p className="tagline">Jev flies the ship four times a second. After each death, Nemotron writes it one rule, and a replay of the death decides whether the rule stays.</p>
+        <p className="tagline">Jev picks the ship&apos;s move up to four times a second. After each death, Nemotron writes it one rule, and a replay of the death decides whether the rule stays.</p>
         <ModeSwitch mode={mode} onChange={setMode} disabled={running} />
         {mode === "jev" ? (
           <>

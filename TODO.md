@@ -5,8 +5,9 @@ Planning is done and approved (`devpost/scope.md`, `prd.md`, `spec.md`). Deadlin
 ## Ship
 - [x] Public repo github.com/mattspaulding/jevaga under MIT (2026-10-21).
 - [x] Vercel project `jevaga` on the Strawberry Digital team, live at https://jevaga.vercel.app (2026-10-21). The team-scoped `*.vercel.app` aliases sit behind Vercel login; `jevaga.vercel.app` is public.
-- [ ] Paste `AI_GATEWAY_API_KEY` and `NEBIUS_API_KEY` into the Vercel project (Production, Sensitive), then redeploy. Until then JEV PLAYS shows JEV UNAVAILABLE.
-- [ ] Firewall rate limits per IP: `/api/move` 600 a minute, `/api/coach` 30 a minute. The API can't create the project's firewall until the Firewall tab has been opened once.
+- [x] `AI_GATEWAY_API_KEY` and `NEBIUS_API_KEY` set in the Vercel project for Production and Preview (2026-10-21). A full Jev run on the live site went through to a coach verdict for $0.0054.
+- [x] Firewall rate limits per IP, answering 429: `/api/move` 600 a minute, `/api/coach` 30 a minute (2026-10-21, checked: the 31st coach request in a minute got 429). Vercel bills $0.50 per million allowed requests through them. The Vercel connector's firewall API returns 404 for this project, so rule changes go through the dashboard.
+- [ ] Pushes to GitHub don't start a Vercel deploy: the Vercel GitHub App probably lacks access to this repo. Add `jevaga` under Repository access at github.com/settings/installations, or redeploy from the Vercel side.
 - [ ] Check that auto top-up is off on the AI Gateway credit and on Nebius, so the prepaid balance is the most anyone can burn. Check both balances around Dec 1.
 - [ ] Re-read both rules pages by hand. WebFetch got a 403 from Devpost on 2026-10-21, so the notes in `hackathons/` are from 2026-09-25.
 - [ ] Demo video, Devpost write-ups, and the 6-ship final review.
