@@ -1,4 +1,4 @@
-import type { DecideInput, Decision, System1 } from "./types";
+import { instructionsFor, type DecideInput, type Decision, type System1 } from "./types";
 
 // Remembers Jev's answer for an exact situation (same fight text, same move
 // descriptions, same rulebook) so the same question isn't asked twice.
@@ -11,7 +11,8 @@ export const cacheStats = { hits: 0, misses: 0 };
 export function cached(inner: System1): System1 {
   return {
     async decide(input: DecideInput): Promise<Decision> {
-      const key = JSON.stringify([input.state, input.moves, input.rules]);
+      // Keyed on the instructions Jev reads, so rewording them never serves an old answer.
+      const key = JSON.stringify([instructionsFor(input.rules), input.state, input.moves]);
       const hit = answers.get(key);
       if (hit) {
         cacheStats.hits++;

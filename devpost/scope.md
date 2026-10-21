@@ -44,7 +44,7 @@ From an empty rulebook on a fixed seed, Jev dies early, then lasts longer run af
 - One screen: the playfield on the left, the panel on the right
 - A formation of three enemy kinds, each with its own attack, its own weapon it can drop for you, and waves that escalate (`enemy-design.md`), plus an Enemy Library page for each
 - Moves: left, right, stay, fire; one hit ends a run; score and a run list
-- Jev flies in real time (about 4 decisions a second) with only its starting line and the rulebook as instructions
+- Jev flies in real time (about 4 decisions a second) with only its starting line and the rulebook as instructions (the rulebook opens with one fixed line: fire when nothing is arriving and an enemy is above)
 - After each death: Nemotron writes one rule (or none), the game replays the death to test it and re-checks every earlier death, and the rule is kept or thrown out
 - The replay shows on the playfield between runs
 - The rulebook window, the coach window and the run list show what was learned

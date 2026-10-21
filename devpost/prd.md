@@ -65,7 +65,7 @@ Source: `enemy-design.md`, which has every number.
 ### Jev flies (System 1)
 - About four times a second, Jev reads the screen as text and chooses left, right, stay or fire, with a probability for each.
 - The screen keeps moving while Jev thinks; its move is applied the instant the answer lands.
-- Jev's instructions are one starting line ("stay alive and shoot enemies") plus the rulebook. Nothing else steers it.
+- Jev's instructions are one starting line ("stay alive and shoot enemies") plus the rulebook. Once it has a rule, the rulebook opens with one fixed line written by hand: when nothing is arriving where it would stop and an enemy is above, fire. (Added 2026-10-21: without it, any rule about danger made Jev stop shooting, and no rule passed the calm-moment check.) Nothing else steers it.
 - [ ] Every Jev move shows its choice, confidence, four probabilities and answer time.
 - [ ] With an empty rulebook, Jev flies on its starting line alone.
 

@@ -11,7 +11,7 @@ import { afterDeath, emptyBook, type Book } from "../lib/learn/judge";
 import { playback, replay, type Decide } from "../lib/learn/replay";
 import type { Coaching } from "../lib/system2/coach";
 import { fake } from "../lib/system1/fake";
-import { MAX_MOVE_LENGTH, MAX_STATE_LENGTH } from "../lib/system1/types";
+import { instructionsFor, MAX_MOVE_LENGTH, MAX_STATE_LENGTH } from "../lib/system1/types";
 import {
   act,
   advance,
@@ -759,6 +759,16 @@ function immortal(w: World) {
   check(`describe() matches describeFight + describeMoves on ${same}/${asks} asks`, same === asks && asks > 40);
 }
 
+// Jev starts on one line; the rulebook comes with the line that keeps it firing when nothing is coming.
+{
+  const none = instructionsFor([]);
+  const one = instructionsFor(["If a Drone is revving above where you stop, glide to the side where nothing arrives soon."]);
+  check(
+    "with no rules Jev gets one line, and a rulebook brings the fire-when-clear line with it",
+    !none.includes("\n") && /nothing is arriving where you'd stop and an enemy is above, fire\./.test(one) && one.endsWith("nothing arrives soon."),
+  );
+}
+
 // The public API routes reject anything longer than a real fight: long fights into later waves stay well under the caps.
 {
   let longestState = 0;
@@ -1149,6 +1159,17 @@ async function failureChecks() {
   };
   const v4 = await afterDeath(death, before, { decide: sitStill, coach: nemotronDown });
   check(`Nemotron down: no rule after ${coachCalls} tries, rulebook unchanged (${v4.kind})`, v4.kind === "coach-failed" && coachCalls === 3 && same(v4.book));
+
+  let coachAsks = 0;
+  const repeats = async (input: { retry?: string }): Promise<Coaching> => {
+    coachAsks++;
+    return input.retry ? rule : { happened: "sat still", change: { kind: "add" }, rule: "an earlier rule" };
+  };
+  const vDup = await afterDeath(death, before, { decide: learner, coach: repeats });
+  check(
+    `a rule the book already has is turned down before any replay, and the retry is kept (${vDup.kind}, ${vDup.book.rules.length} rules)`,
+    vDup.kind === "kept" && vDup.book.rules.length === 2 && coachAsks === 2 && /already rule 1/.test(vDup.attempts[0].why ?? ""),
+  );
 
   const v5 = await afterDeath(death, before, { decide: learner, coach });
   check(`with everything up, the same death gets its rule kept (${v5.kind})`, v5.kind === "kept" && v5.book.rules.length === 2);

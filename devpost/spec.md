@@ -83,7 +83,7 @@ Unchanged: `pnpm dev`, open http://localhost:3000 (`?seed=N` optional), keys in 
 `lib/system1/*`, `app/api/move/route.ts`. PRD ref: `prd.md > Jev flies (System 1)`.
 - Carried over: the swappable interface, Jev through the gateway's TypeSafe route, the offline fake (SIMULATED), the exact-repeat cache, response validation, `driveWithJev` (at most 4 questions a second; the move applies when the answer lands; errors or 2.5 s without an answer pause the fight and retry every 3 s).
 - `DecideInput` becomes `{ state, moves, rules: string[] }`; the cache key uses the rules.
-- Instructions (`instructionsFor(rules)` in `lib/system1/types.ts`): "Pick the ship's next move in a space shooter. Stay alive and shoot enemies." With rules, add a blank line, "Rules you've learned. Follow each one when its situation comes up:", and the rules numbered 1 to n. No hand-written survival rule: Jev starts dumb.
+- Instructions (`instructionsFor(rules)` in `lib/system1/types.ts`): "Pick the ship's next move in a space shooter. Stay alive and shoot enemies." With rules, add a blank line, "Rules you've learned. Follow each one when its situation comes up. When nothing is arriving where you'd stop and an enemy is above, fire.", and the rules numbered 1 to n. No hand-written survival rule: Jev starts dumb. (The firing line was added 2026-10-21: without it, any danger rule made Jev stop shooting in calm moments, and the judge kept no rules in 24 runs.)
 - `driveWithJev` gains an `onAsk(input, world)` hook, called just before each question, and an `onAskFailed()` hook for a question that got no answer, and passes each answer to `onDecision` as now. The recorder uses all three.
 
 ### The flight recorder

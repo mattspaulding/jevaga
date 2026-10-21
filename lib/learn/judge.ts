@@ -8,6 +8,10 @@ import { replay, REPLAY_MAX_PAST, type Decide, type ReplayResult } from "./repla
 // in calm moments. Nothing here trusts the coach; everything is flown.
 
 export type Book = { rules: string[]; deaths: Death[]; controls: Control[] };
+
+// Two rules are the same if they differ only in case, spacing or a final full stop.
+const norm = (rule: string) => rule.toLowerCase().replace(/\s+/g, " ").replace(/[.!\s]+$/, "").trim();
+export const sameRule = (a: string, b: string) => norm(a) === norm(b);
 export const emptyBook = (): Book => ({ rules: [], deaths: [], controls: [] });
 
 const REGRESSION_LIMIT = 8; // most recent fixed deaths re-flown for each new rule
@@ -116,6 +120,13 @@ export async function afterDeath(death: Death, before: Book, deps: JudgeDeps): P
       return { kind: "none", death: d, attempts, book, shown: lastShown };
     }
     const candidate = applyChange(book.rules, coaching);
+    // A rule the book already has adds a duplicate line to the RULEBOOK, or changes nothing.
+    const repeats = book.rules.findIndex((r) => sameRule(r, coaching.rule ?? ""));
+    if (repeats >= 0) {
+      a.why = `your rule "${coaching.rule}" is already rule ${repeats + 1}. Write a different rule.`;
+      retry = a.why;
+      continue;
+    }
 
     deps.onStep?.({ kind: "test", attempt, coaching });
     a.thisDeath = await replay(death, candidate, deps.decide);

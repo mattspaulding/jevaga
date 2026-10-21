@@ -14,6 +14,8 @@ Jev picks the ship's move up to four times a second. It starts with one instruct
 
 **The game decides, not either model.** Before a rule is kept, the game replays the death on the same physics steps with the new rule. The ship has to survive. The last 8 deaths the rulebook already fixed have to still survive. And Jev has to keep firing in calm moments, so a rule can't make it safe by making it useless. If a rule fails, Nemotron hears why and gets one more try.
 
+Once Jev has a rule, its rulebook also opens with one line written by hand: "When nothing is arriving where you'd stop and an enemy is above, fire." Without it, any rule about danger made Jev stop shooting everywhere. In calm moments its chance of firing fell from 0.73 to 0.23, and the game kept 0 rules in 24 runs. With the line it kept 5 in 16.
+
 Every answer from the live run is pinned to the 20 ms physics step it landed on, so a replay asks Jev the same questions at the same moments, and with a new rule the only thing that can change is what Jev picks. Jev doesn't always answer the same question the same way, though. If the replay with the old rulebook survives too, the game calls that death luck and writes no rule.
 
 ## Run it
